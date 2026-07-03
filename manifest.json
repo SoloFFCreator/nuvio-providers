@@ -22,5 +22,28 @@
     "limited": false,
     "disabledPlatforms": [],
     "supportsExternalPlayer": true
+  },
+  {
+    "id": "watchanimeworld",
+    "name": "WatchAnimeWorld",
+    "description": "WatchAnimeWorld anime streaming with TMDB title resolution, multi-strategy stream extraction, and Cloudflare-bypass headers",
+    "version": "1.0.0",
+    "author": "Nuvio Team",
+    "supportedTypes": [
+      "movie",
+      "tv"
+    ],
+    "filename": "providers/watchanimeworld.js",
+    "enabled": true,
+    "formats": [
+      "m3u8",
+      "mp4"
+    ],
+    "logo": "https://www.google.com/s2/favicons?domain=watchanimeworld.net&sz=128",
+    "contentLanguage": [
+      "en",
+      "ja"
+    ],
+    "notes": "Resolves TMDB IDs to titles via TMDB public page scrape. Falls back to constructed episode URLs if listing is unavailable."
   }
 ]
