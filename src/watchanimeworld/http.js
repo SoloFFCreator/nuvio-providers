@@ -8,7 +8,7 @@
 // ──────────────────────────────────────────────────────────────
 // UPDATE THIS if the site moves to a new domain.
 // ──────────────────────────────────────────────────────────────
-const BASE_URL = 'https://watchanimeworld.net';
+const BASE_URL = 'https://watchanimeworld.top';
 
 const HEADERS = {
   'User-Agent':

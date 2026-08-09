@@ -1,6 +1,6 @@
 /**
  * watchanimeworld - Built from src/watchanimeworld/
- * Generated: 2026-08-08T03:16:03.771Z
+ * Generated: 2026-08-09T03:20:50.730Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -58,7 +58,7 @@ __export(watchanimeworld_exports, {
 module.exports = __toCommonJS(watchanimeworld_exports);
 
 // src/watchanimeworld/http.js
-var BASE_URL = "https://watchanimeworld.net";
+var BASE_URL = "https://watchanimeworld.top";
 var HEADERS = {
   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
   "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
@@ -119,6 +119,67 @@ function extractUrlFromScripts(html) {
       return m[1];
   }
   return null;
+}
+function base64Decode(str) {
+  try {
+    var binary = atob(str);
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return new TextDecoder().decode(bytes);
+  } catch (e) {
+    try {
+      return Buffer.from(str, "base64").toString("utf8");
+    } catch (e2) {
+      console.log("[watchanimeworld] Base64 decode failed");
+      return "";
+    }
+  }
+}
+function extractFromIframe($, html) {
+  var streams = [];
+  var iframes = $("iframe");
+  iframes.each(function() {
+    var src = $(this).attr("src") || $(this).attr("data-src") || "";
+    if (!src)
+      return;
+    if (src.startsWith("/"))
+      src = BASE_URL + src;
+    if (src.includes("player1.php?data=") || src.includes("player2.php?data=")) {
+      try {
+        var urlObj = new URL(src);
+        var base64Data = urlObj.searchParams.get("data");
+        if (base64Data) {
+          var decoded = JSON.parse(base64Decode(base64Data));
+          if (Array.isArray(decoded)) {
+            decoded.forEach(function(item) {
+              if (item.link) {
+                streams.push({
+                  name: "watchanimeworld",
+                  title: "WatchAnimeWorld \u2014 " + (item.language || "Direct"),
+                  url: item.link,
+                  quality: "AUTO",
+                  headers: HEADERS
+                });
+              }
+            });
+          }
+        }
+      } catch (e) {
+        console.log("[watchanimeworld] Failed to decode player data: " + e.message);
+      }
+    } else if (!src.includes("ads") && !src.includes("facebook") && !src.includes("twitter")) {
+      streams.push({
+        name: "watchanimeworld",
+        title: "Embed Player",
+        url: src,
+        quality: "AUTO",
+        headers: HEADERS
+      });
+    }
+  });
+  return streams;
 }
 function searchAnime(title) {
   return __async(this, null, function* () {
@@ -223,19 +284,10 @@ function extractStreamsFromPage(episodePageUrl) {
       }
     }
     if (streams.length === 0) {
-      var iframes = $("iframe");
-      iframes.each(function() {
-        var src = $(this).attr("src");
-        if (src && !src.includes("ads") && !src.includes("facebook") && !src.includes("twitter")) {
-          streams.push({
-            name: "watchanimeworld",
-            title: "Embed Player",
-            url: src.startsWith("http") ? src : BASE_URL + src,
-            quality: "AUTO",
-            headers: HEADERS
-          });
-        }
-      });
+      var iframeStreams = extractFromIframe($, html);
+      if (iframeStreams.length > 0) {
+        streams = streams.concat(iframeStreams);
+      }
     }
     if (streams.length === 0) {
       var scriptUrl = extractUrlFromScripts(html);
