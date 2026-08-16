@@ -5,6 +5,10 @@ vi.mock("./metadata.js", () => ({
   resolveMetadata: vi.fn(async () => ({ primaryTitle: "Test Anime", titles: ["Test Anime"] })),
 }));
 
+vi.mock("./blakite.js", () => ({
+  resolveBlakiteStreams: vi.fn(async () => []),
+}));
+
 vi.mock("./megaPlay.js", () => ({
   resolveMegaPlayStreams: vi.fn(async () => [
     {

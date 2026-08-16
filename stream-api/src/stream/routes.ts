@@ -3,6 +3,7 @@ import { StreamApiError } from "./errors.js";
 import { resolveMetadata } from "./metadata.js";
 import { parseStreamRequest } from "./validation.js";
 import { toNuvioStreams } from "./compatibility.js";
+import { resolveBlakiteStreams } from "./blakite.js";
 import { resolveMegaPlayStreams, isClientFetchableMedia } from "./megaPlay.js";
 import { resolveWatchAnimeWorldStreams } from "./watchAnimeWorld.js";
 
@@ -21,6 +22,7 @@ export async function handleStreamRequest(req: Request, res: Response): Promise<
     const request = parseStreamRequest(req.query as Record<string, unknown>);
     const metadata = await resolveMetadata({ anilistId: request.anilistId, malId: request.malId });
     const resolvers = [
+      () => resolveBlakiteStreams(metadata, request),
       () => resolveWatchAnimeWorldStreams(metadata, request),
       () => resolveMegaPlayStreams(metadata, request),
     ];
@@ -46,7 +48,7 @@ export async function handleStreamRequest(req: Request, res: Response): Promise<
     throw new StreamApiError(
       404,
       "streams_not_found",
-      "No client-fetchable direct playback stream was available from WatchAnimeWorld or MegaPlay."
+      "No client-fetchable direct playback stream was available from BlakiteAPI, WatchAnimeWorld, or MegaPlay."
     );
   } catch (error) {
     sendError(res, error);

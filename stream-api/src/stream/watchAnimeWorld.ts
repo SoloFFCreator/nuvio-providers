@@ -37,9 +37,12 @@ function hlsHeaders(referer: string): StreamHeaders {
 export function isDirectPlaybackUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
+    const isBlakiteManifest =
+      parsed.hostname === "hugh.cdn.rumble.cloud" &&
+      parsed.searchParams.get("r_file") === "chunklist.m3u8";
     return (
       !parsed.hostname.endsWith("short.icu") &&
-      /\.(m3u8|mp4|mkv)$/i.test(parsed.pathname)
+      (/\.(m3u8|mp4|mkv)$/i.test(parsed.pathname) || isBlakiteManifest)
     );
   } catch {
     return false;

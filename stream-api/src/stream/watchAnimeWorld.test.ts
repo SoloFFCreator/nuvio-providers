@@ -6,6 +6,7 @@ describe("isDirectPlaybackUrl", () => {
     expect(isDirectPlaybackUrl("https://cdn.example.net/show/master.m3u8?expires=123&signature=abc")).toBe(true);
     expect(isDirectPlaybackUrl("https://cdn.example.net/show/video.mp4")).toBe(true);
     expect(isDirectPlaybackUrl("https://cdn.example.net/show/video.mkv?token=abc")).toBe(true);
+    expect(isDirectPlaybackUrl("https://hugh.cdn.rumble.cloud/video/path/video.caa.tar?r_file=chunklist.m3u8&r_range=1-2")).toBe(true);
   });
 
   it("rejects short-link redirects and HTML embed pages", () => {
