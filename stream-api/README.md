@@ -12,6 +12,18 @@ pnpm dev
 
 The API reads the `PORT` environment variable. The health endpoint is `GET /api/health`.
 
+## Deploy
+
+Deploy `stream-api/` as a standard Node.js service. Install dependencies, build TypeScript, and run the compiled server with a platform-provided `PORT` value.
+
+```bash
+pnpm install --frozen-lockfile
+pnpm build
+pnpm start
+```
+
+For managed Manus hosting, open the saved project checkpoint and select **Publish** in the management interface. For another Node.js host, set its build command to `pnpm install --frozen-lockfile && pnpm build` and its start command to `pnpm start`.
+
 ## Request
 
 Use exactly one identifier. `anilistId` is the primary input; `malId` is also supported. The `type` parameter is required and only accepts `movie` or `tv`. Television requests also require positive `season` and `episode` values.
@@ -28,6 +40,8 @@ X-App-Package: com.midnight.anime
 ```
 
 The only allowed `X-App-Package` values are `com.midnight.anime` and `com.midnight.anime.tv`.
+
+> `X-App-Package` is a basic private-app restriction and can be reproduced by a determined third-party client. Use a stronger app-attestation mechanism before treating this API as publicly secure.
 
 ## Success response
 
