@@ -1,6 +1,6 @@
 /**
  * watchanimeworld - Built from src/watchanimeworld/
- * Generated: 2026-08-09T03:20:50.730Z
+ * Generated: 2026-08-16T09:32:23.521Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -169,6 +169,11 @@ function extractFromIframe($, html) {
       } catch (e) {
         console.log("[watchanimeworld] Failed to decode player data: " + e.message);
       }
+    } else if (src.includes("zephyrix.top") || src.includes("zephyrflick.top")) {
+      streams.push({
+        type: "zephyrix",
+        url: src
+      });
     } else if (!src.includes("ads") && !src.includes("facebook") && !src.includes("twitter")) {
       streams.push({
         name: "watchanimeworld",
@@ -254,6 +259,38 @@ function resolveEpisodePage(detailUrl, season, episode) {
     return constructed;
   });
 }
+function resolveZephyrixStream(embedUrl, referer) {
+  return __async(this, null, function* () {
+    try {
+      var videoId = embedUrl.split("/").pop();
+      var domain = new URL(embedUrl).origin;
+      var apiUrl = domain + "/player/index.php?data=" + videoId + "&do=getVideo";
+      console.log("[watchanimeworld] Resolving Zephyrix API: " + apiUrl);
+      var resText = yield fetchText(apiUrl, {
+        method: "POST",
+        headers: {
+          "X-Requested-With": "XMLHttpRequest",
+          "Referer": embedUrl,
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        body: "hash=" + videoId + "&r=" + encodeURIComponent(referer)
+      });
+      var data = JSON.parse(resText);
+      if (data && (data.videoSource || data.securedLink)) {
+        return {
+          name: "watchanimeworld",
+          title: "WatchAnimeWorld \u2014 Direct (HLS)",
+          url: data.videoSource || data.securedLink,
+          quality: "AUTO",
+          headers: Object.assign({}, HEADERS, { "Referer": domain + "/" })
+        };
+      }
+    } catch (e) {
+      console.log("[watchanimeworld] Zephyrix resolution failed: " + e.message);
+    }
+    return null;
+  });
+}
 function extractStreamsFromPage(episodePageUrl) {
   return __async(this, null, function* () {
     var html = yield fetchText(episodePageUrl);
@@ -284,9 +321,25 @@ function extractStreamsFromPage(episodePageUrl) {
       }
     }
     if (streams.length === 0) {
-      var iframeStreams = extractFromIframe($, html);
-      if (iframeStreams.length > 0) {
-        streams = streams.concat(iframeStreams);
+      var rawIframeStreams = extractFromIframe($, html);
+      for (var i = 0; i < rawIframeStreams.length; i++) {
+        var s = rawIframeStreams[i];
+        if (s.type === "zephyrix") {
+          var resolved = yield resolveZephyrixStream(s.url, episodePageUrl);
+          if (resolved) {
+            streams.push(resolved);
+          } else {
+            streams.push({
+              name: "watchanimeworld",
+              title: "Embed Player",
+              url: s.url,
+              quality: "AUTO",
+              headers: HEADERS
+            });
+          }
+        } else {
+          streams.push(s);
+        }
       }
     }
     if (streams.length === 0) {

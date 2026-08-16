@@ -164,6 +164,13 @@ function extractFromIframe($, html) {
       } catch (e) {
         console.log('[watchanimeworld] Failed to decode player data: ' + e.message);
       }
+    } else if (src.includes('zephyrix.top') || src.includes('zephyrflick.top')) {
+      // High priority: Resolve direct stream from these known providers
+      // We'll handle this in the main loop to keep it async friendly
+      streams.push({
+        type: 'zephyrix',
+        url: src
+      });
     } else if (!src.includes('ads') && !src.includes('facebook') && !src.includes('twitter')) {
       // General iframe fallback
       streams.push({
@@ -279,6 +286,40 @@ async function resolveEpisodePage(detailUrl, season, episode) {
   return constructed;
 }
 
+async function resolveZephyrixStream(embedUrl, referer) {
+  try {
+    var videoId = embedUrl.split('/').pop();
+    var domain = new URL(embedUrl).origin;
+    var apiUrl = domain + '/player/index.php?data=' + videoId + '&do=getVideo';
+    
+    console.log('[watchanimeworld] Resolving Zephyrix API: ' + apiUrl);
+    
+    var resText = await fetchText(apiUrl, {
+      method: 'POST',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'Referer': embedUrl,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: 'hash=' + videoId + '&r=' + encodeURIComponent(referer)
+    });
+    
+    var data = JSON.parse(resText);
+    if (data && (data.videoSource || data.securedLink)) {
+      return {
+        name: 'watchanimeworld',
+        title: 'WatchAnimeWorld — Direct (HLS)',
+        url: data.videoSource || data.securedLink,
+        quality: 'AUTO',
+        headers: Object.assign({}, HEADERS, { 'Referer': domain + '/' })
+      };
+    }
+  } catch (e) {
+    console.log('[watchanimeworld] Zephyrix resolution failed: ' + e.message);
+  }
+  return null;
+}
+
 async function extractStreamsFromPage(episodePageUrl) {
   var html = await fetchText(episodePageUrl);
   var $ = cheerio.load(html);
@@ -314,9 +355,26 @@ async function extractStreamsFromPage(episodePageUrl) {
 
   // ── Strategy C: Iframe embed (third-party player) & Internal API ──
   if (streams.length === 0) {
-    var iframeStreams = extractFromIframe($, html);
-    if (iframeStreams.length > 0) {
-      streams = streams.concat(iframeStreams);
+    var rawIframeStreams = extractFromIframe($, html);
+    for (var i = 0; i < rawIframeStreams.length; i++) {
+      var s = rawIframeStreams[i];
+      if (s.type === 'zephyrix') {
+        var resolved = await resolveZephyrixStream(s.url, episodePageUrl);
+        if (resolved) {
+          streams.push(resolved);
+        } else {
+          // Fallback to embed if resolution fails
+          streams.push({
+            name: 'watchanimeworld',
+            title: 'Embed Player',
+            url: s.url,
+            quality: 'AUTO',
+            headers: HEADERS
+          });
+        }
+      } else {
+        streams.push(s);
+      }
     }
   }
 
