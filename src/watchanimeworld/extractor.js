@@ -92,6 +92,15 @@ function parseQuality(raw) {
   return match ? match[1].toUpperCase() : null;
 }
 
+function isDirectPlaybackUrl(value) {
+  try {
+    var parsed = new URL(value);
+    return !parsed.hostname.endsWith('short.icu') && /\.(m3u8|mp4|mkv)$/i.test(parsed.pathname);
+  } catch (e) {
+    return false;
+  }
+}
+
 function extractUrlFromScripts(html) {
   var patterns = [
     /["'](https?:\/\/[^\s"']+\.(m3u8|mp4))["']/i,
@@ -102,7 +111,7 @@ function extractUrlFromScripts(html) {
   ];
   for (var i = 0; i < patterns.length; i++) {
     var m = html.match(patterns[i]);
-    if (m) return m[1];
+    if (m && isDirectPlaybackUrl(m[1])) return m[1];
   }
   return null;
 }
@@ -149,7 +158,7 @@ function extractFromIframe($, html) {
           var decoded = JSON.parse(base64Decode(base64Data));
           if (Array.isArray(decoded)) {
             decoded.forEach(function(item) {
-              if (item.link) {
+              if (item.link && isDirectPlaybackUrl(item.link)) {
                 streams.push({
                   name: 'watchanimeworld',
                   title: 'WatchAnimeWorld — ' + (item.language || 'Direct'),
@@ -171,16 +180,9 @@ function extractFromIframe($, html) {
         type: 'zephyrix',
         url: src
       });
-    } else if (!src.includes('ads') && !src.includes('facebook') && !src.includes('twitter')) {
-      // General iframe fallback
-      streams.push({
-        name: 'watchanimeworld',
-        title: 'Embed Player',
-        url: src,
-        quality: 'AUTO',
-        headers: HEADERS
-      });
     }
+    // Do not return iframe/embed pages to Nuvio. They are not playback URLs.
+
   });
   
   return streams;
@@ -305,11 +307,12 @@ async function resolveZephyrixStream(embedUrl, referer) {
     });
     
     var data = JSON.parse(resText);
-    if (data && (data.videoSource || data.securedLink)) {
+    var directUrl = data && (data.videoSource || data.securedLink);
+    if (directUrl && isDirectPlaybackUrl(directUrl)) {
       return {
         name: 'watchanimeworld',
         title: 'WatchAnimeWorld — Direct (HLS)',
-        url: data.videoSource || data.securedLink,
+        url: directUrl,
         quality: 'AUTO',
         headers: Object.assign({}, HEADERS, { 'Referer': domain + '/' })
       };
@@ -327,7 +330,7 @@ async function extractStreamsFromPage(episodePageUrl) {
 
   // ── Strategy A: Direct <source> tag inside a <video> / #player ──
   var directSrc = $(SEL_VIDEO_SRC_DIRECT).attr(ATTR_VIDEO_SRC_DIRECT);
-  if (directSrc) {
+  if (directSrc && isDirectPlaybackUrl(directSrc)) {
     var quality = parseQuality($(SEL_QUALITY_BADGE).first().text()) || 'AUTO';
     streams.push({
       name: 'watchanimeworld',
@@ -341,7 +344,7 @@ async function extractStreamsFromPage(episodePageUrl) {
   // ── Strategy B: data-src attribute on the player div ──
   if (streams.length === 0) {
     var embedSrc = $(SEL_PLAYER_EMBED).attr(ATTR_PLAYER_EMBED);
-    if (embedSrc) {
+    if (embedSrc && isDirectPlaybackUrl(embedSrc)) {
       var qualityB = parseQuality($(SEL_QUALITY_BADGE).first().text()) || 'AUTO';
       streams.push({
         name: 'watchanimeworld',
@@ -362,17 +365,8 @@ async function extractStreamsFromPage(episodePageUrl) {
         var resolved = await resolveZephyrixStream(s.url, episodePageUrl);
         if (resolved) {
           streams.push(resolved);
-        } else {
-          // Fallback to embed if resolution fails
-          streams.push({
-            name: 'watchanimeworld',
-            title: 'Embed Player',
-            url: s.url,
-            quality: 'AUTO',
-            headers: HEADERS
-          });
         }
-      } else {
+      } else if (s.url && isDirectPlaybackUrl(s.url)) {
         streams.push(s);
       }
     }
@@ -381,7 +375,7 @@ async function extractStreamsFromPage(episodePageUrl) {
   // ── Strategy D: Regex scan of inline <script> blocks ──
   if (streams.length === 0) {
     var scriptUrl = extractUrlFromScripts(html);
-    if (scriptUrl) {
+    if (scriptUrl && isDirectPlaybackUrl(scriptUrl)) {
       var inferredQuality = 'AUTO';
       streams.push({
         name: 'watchanimeworld',
@@ -397,7 +391,12 @@ async function extractStreamsFromPage(episodePageUrl) {
     console.log('[watchanimeworld] No streams found on: ' + episodePageUrl);
   }
 
-  return streams;
+  var seen = {};
+  return streams.filter(function(stream) {
+    if (!stream || !isDirectPlaybackUrl(stream.url) || seen[stream.url]) return false;
+    seen[stream.url] = true;
+    return true;
+  });
 }
 
 async function extractStreams(title, mediaType, season, episode) {

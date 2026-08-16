@@ -1,9 +1,3 @@
-export const ALLOWED_ANDROID_PACKAGES = [
-  "com.midnight.anime",
-  "com.midnight.anime.tv",
-] as const;
-
-export type AllowedAndroidPackage = (typeof ALLOWED_ANDROID_PACKAGES)[number];
 export type MediaType = "movie" | "tv";
 
 export type StreamHeaders = {
