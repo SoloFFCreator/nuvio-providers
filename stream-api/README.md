@@ -50,6 +50,9 @@ The response body is always a JSON array, including when only one direct source 
     "quality": "AUTO",
     "headers": {
       "User-Agent": "Mozilla/5.0 ...",
+      "Accept": "text/html,application/xhtml+xml,...",
+      "Accept-Language": "en-US,en;q=0.9",
+      "X-Requested-With": "XMLHttpRequest",
       "Referer": "https://play.zephyrix.top/"
     }
   }
@@ -111,6 +114,10 @@ player.play()
 ```
 
 Signed HLS URLs can expire, so resolve a fresh stream immediately before playback instead of storing response URLs long term.
+
+### Network validation
+
+The API validates fresh direct media links before returning them and checks HLS master, child-playlist, and first-segment access with the source's playback headers. Cloudflare may still make a request appear differently from different egress networks: a sandbox or server probe can receive a challenge while an Android/Nuvio client that uses the freshly returned URL and every returned header can play it. Therefore, the Android player must pass the **entire** `headers` map into its media data source, must resolve immediately before playback, and must report any playback error so the source can be rechecked.
 
 ## Nuvio provider requirements
 
