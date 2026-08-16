@@ -3,6 +3,7 @@ import { StreamApiError } from "./errors.js";
 import { resolveMetadata } from "./metadata.js";
 import { parseStreamRequest } from "./validation.js";
 import { toNuvioStreams } from "./compatibility.js";
+import { resolveMegaPlayStreams, isClientFetchableMedia } from "./megaPlay.js";
 import { resolveWatchAnimeWorldStreams } from "./watchAnimeWorld.js";
 
 function sendError(res: Response, error: unknown): void {
@@ -19,11 +20,34 @@ export async function handleStreamRequest(req: Request, res: Response): Promise<
   try {
     const request = parseStreamRequest(req.query as Record<string, unknown>);
     const metadata = await resolveMetadata({ anilistId: request.anilistId, malId: request.malId });
-    const streams = await resolveWatchAnimeWorldStreams(metadata, request);
+    const resolvers = [
+      () => resolveWatchAnimeWorldStreams(metadata, request),
+      () => resolveMegaPlayStreams(metadata, request),
+    ];
 
-    // Nuvio requires a top-level array. A one-item array is valid, but each item
-    // must include the provider name in addition to the direct playback fields.
-    res.status(200).json(toNuvioStreams(streams));
+    for (const resolveStreams of resolvers) {
+      const streams = await resolveStreams().catch(() => []);
+      const clientFetchableStreams = (
+        await Promise.all(
+          streams.map(async stream =>
+            (await isClientFetchableMedia(stream.url, stream.headers)) ? stream : null
+          )
+        )
+      ).filter((stream): stream is NonNullable<typeof stream> => stream !== null);
+
+      if (clientFetchableStreams.length > 0) {
+        // Nuvio requires a top-level array. A one-item array is valid, but each item
+        // must include the provider name in addition to the direct playback fields.
+        res.status(200).json(toNuvioStreams(clientFetchableStreams));
+        return;
+      }
+    }
+
+    throw new StreamApiError(
+      404,
+      "streams_not_found",
+      "No client-fetchable direct playback stream was available from WatchAnimeWorld or MegaPlay."
+    );
   } catch (error) {
     sendError(res, error);
   }

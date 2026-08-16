@@ -20,7 +20,13 @@ describe("isDirectPlaybackUrl", () => {
         url: "https://cdn.example.net/show/master.m3u8?token=abc",
         title: "English",
         quality: "AUTO",
-        headers: { "User-Agent": "test-agent", Referer: "https://player.example.net/" },
+        headers: {
+          "User-Agent": "test-agent",
+          Referer: "https://player.example.net/",
+          Accept: "*/*",
+          "Accept-Language": "en-US,en;q=0.9",
+          "X-Requested-With": "XMLHttpRequest",
+        },
         ignored: "not returned",
       } as unknown as Parameters<typeof normalizeDirectStreams>[0][number],
       {
@@ -45,6 +51,12 @@ describe("isDirectPlaybackUrl", () => {
 
     expect(streams).toHaveLength(1);
     expect(Object.keys(streams[0]).sort()).toEqual(["headers", "quality", "title", "url"]);
-    expect(streams[0]?.headers).toEqual({ "User-Agent": "test-agent", Referer: "https://player.example.net/" });
+    expect(streams[0]?.headers).toEqual({
+      "User-Agent": "test-agent",
+      Referer: "https://player.example.net/",
+      Accept: "*/*",
+      "Accept-Language": "en-US,en;q=0.9",
+      "X-Requested-With": "XMLHttpRequest",
+    });
   });
 });

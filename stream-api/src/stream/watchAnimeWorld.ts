@@ -11,6 +11,12 @@ const SITE_HEADERS = {
   "Accept-Language": "en-US,en;q=0.9",
   Referer: `${BASE_URL}/`,
 };
+const PLAYBACK_HEADERS = {
+  "User-Agent": BROWSER_USER_AGENT,
+  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+  "Accept-Language": "en-US,en;q=0.9",
+  "X-Requested-With": "XMLHttpRequest",
+};
 
 type SearchResult = { title: string; url: string; slug: string };
 type LanguageLink = { language: string; link: string };
@@ -25,7 +31,7 @@ function normaliseTitle(value: string): string {
 }
 
 function hlsHeaders(referer: string): StreamHeaders {
-  return { "User-Agent": BROWSER_USER_AGENT, Referer: referer };
+  return { ...PLAYBACK_HEADERS, Referer: referer };
 }
 
 export function isDirectPlaybackUrl(url: string): boolean {
@@ -219,8 +225,7 @@ export function normalizeDirectStreams(streams: DirectStream[]): DirectStream[] 
         title: stream.title,
         quality: stream.quality,
         headers: {
-          "User-Agent": stream.headers["User-Agent"],
-          Referer: stream.headers.Referer,
+          ...stream.headers,
         },
       },
     ];
