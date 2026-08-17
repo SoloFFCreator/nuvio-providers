@@ -80,8 +80,8 @@ describe("BlakiteAPI resolver", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(resolveBlakiteStreams(
-      { primaryTitle: "Lookism", titles: ["Lookism", "Oemojisangjuui"] },
-      { anilistId: 158539, type: "tv", audio: "hindi", season: 1, episode: 1 }
+      { primaryTitle: "Unrelated local title", titles: ["Unrelated local title"] },
+      { tmdbId: 210942, type: "tv", audio: "hindi", season: 1, episode: 1 }
     )).resolves.toEqual([expect.objectContaining({
       name: "BlakiteAPI",
       url: "https://hugh.cdn.rumble.cloud/video/fww1/e1/s8/2/Y/R/y/x/YRyxy.caa.mp4",

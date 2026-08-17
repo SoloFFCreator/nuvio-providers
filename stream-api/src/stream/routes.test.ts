@@ -57,7 +57,7 @@ describe("handleStreamRequest", () => {
   it("uses BlakiteAPI only for a Hindi request without X-App-Package", async () => {
     const { response, captured } = makeResponse();
     const request = {
-      query: { anilistId: "20", type: "tv", season: "1", episode: "1", audio: "hindi" },
+      query: { tmdbId: "210942", type: "tv", season: "1", episode: "1", audio: "hindi" },
       header: vi.fn(() => undefined),
     } as unknown as Request;
 
@@ -72,7 +72,7 @@ describe("handleStreamRequest", () => {
   it.each(["sub", "dub"] as const)("uses MegaPlay only for a %s request", async audio => {
     const { response, captured } = makeResponse();
     const request = {
-      query: { anilistId: "20", type: "tv", season: "1", episode: "1", audio },
+      query: { tmdbId: "210942", type: "tv", season: "1", episode: "1", audio },
       header: vi.fn(() => undefined),
     } as unknown as Request;
 

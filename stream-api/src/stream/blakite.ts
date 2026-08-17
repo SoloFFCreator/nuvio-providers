@@ -97,6 +97,12 @@ function matchesRequestType(entry: CatalogEntry, request: StreamRequest): boolea
 
 async function findCatalogEntry(metadata: MediaMetadata, request: StreamRequest): Promise<CatalogEntry | null> {
   const entries = await getCatalogEntries();
+  const exactTmdbEntry = request.tmdbId === undefined ? undefined : entries.find(entry =>
+    String(entry.tmdbId ?? "") === String(request.tmdbId) &&
+    matchesRequestType(entry, request) &&
+    /hindi|org/i.test(`${entry.title ?? ""} ${entry.language ?? ""}`)
+  );
+  if (exactTmdbEntry) return exactTmdbEntry;
   const titles = [metadata.primaryTitle, ...metadata.titles].filter(Boolean).slice(0, 8);
   let best: { entry: CatalogEntry; score: number } | null = null;
 
