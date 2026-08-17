@@ -1,5 +1,5 @@
 import { StreamApiError } from "./errors.js";
-import type { MediaType, StreamRequest } from "./types.js";
+import type { AudioPreference, MediaType, StreamRequest } from "./types.js";
 
 function requiredPositiveInteger(value: unknown, field: string): number {
   if (typeof value !== "string" || !/^\d+$/.test(value)) {
@@ -19,6 +19,12 @@ function optionalPositiveInteger(value: unknown, field: string): number | undefi
   return requiredPositiveInteger(value, field);
 }
 
+function parseAudioPreference(value: unknown): AudioPreference {
+  if (value === undefined) return "sub";
+  if (value === "hindi" || value === "sub" || value === "dub") return value;
+  throw new StreamApiError(400, "invalid_audio", "audio must be exactly hindi, sub, or dub.");
+}
+
 export function parseStreamRequest(query: Record<string, unknown>): StreamRequest {
   const type = query.type;
   if (type !== "movie" && type !== "tv") {
@@ -35,6 +41,7 @@ export function parseStreamRequest(query: Record<string, unknown>): StreamReques
     anilistId,
     malId,
     type: type as MediaType,
+    audio: parseAudioPreference(query.audio),
     season: optionalPositiveInteger(query.season, "season"),
     episode: optionalPositiveInteger(query.episode, "episode"),
   };

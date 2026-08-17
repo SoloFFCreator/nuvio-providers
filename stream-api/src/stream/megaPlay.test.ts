@@ -4,6 +4,7 @@ import { isClientFetchableMedia, resolveMegaPlayStreams } from "./megaPlay.js";
 const request = {
   anilistId: 20,
   type: "tv" as const,
+  audio: "sub" as const,
   season: 1,
   episode: 1,
 };
@@ -48,6 +49,23 @@ describe("MegaPlay direct source resolver", () => {
       },
     ]);
     expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("uses MegaPlay's dub route and labels a verified dubbed source", async () => {
+    const mediaUrl = "https://cdn.watching.onl/anime/test/master.m3u8";
+    const fetchMock = mockFetch([
+      new Response('<div id="megaplay-player" data-id="player-dub"></div>', { status: 200 }),
+      new Response(JSON.stringify({ sources: { file: mediaUrl } }), { status: 200 }),
+      new Response("#EXTM3U\n#EXT-X-VERSION:3", {
+        status: 200,
+        headers: { "content-type": "application/vnd.apple.mpegurl" },
+      }),
+    ]);
+
+    await expect(resolveMegaPlayStreams(metadata, { ...request, audio: "dub" })).resolves.toEqual([
+      expect.objectContaining({ name: "MegaPlay", title: "MegaPlay — dub", url: mediaUrl }),
+    ]);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/ani/20/1/dub");
   });
 
   it("validates the first child playlist and media segment", async () => {

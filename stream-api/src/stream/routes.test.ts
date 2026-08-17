@@ -6,7 +6,15 @@ vi.mock("./metadata.js", () => ({
 }));
 
 vi.mock("./blakite.js", () => ({
-  resolveBlakiteStreams: vi.fn(async () => []),
+  resolveBlakiteStreams: vi.fn(async () => [
+    {
+      name: "BlakiteAPI",
+      url: "https://hugh.cdn.rumble.cloud/video/test.caa.tar?r_file=chunklist.m3u8&r_range=1-2",
+      title: "BlakiteAPI — Hindi — 480p",
+      quality: "480P",
+      headers: { "User-Agent": "Mozilla/5.0", Referer: "https://blakiteapi.xyz/", Origin: "https://blakiteapi.xyz" },
+    },
+  ]),
 }));
 
 vi.mock("./megaPlay.js", () => ({
@@ -14,7 +22,7 @@ vi.mock("./megaPlay.js", () => ({
     {
       name: "MegaPlay",
       url: "https://cdn.watching.onl/video/master.m3u8?token=abc",
-      title: "MegaPlay — sub",
+      title: "MegaPlay — requested audio",
       quality: "AUTO",
       headers: { "User-Agent": "Mozilla/5.0", Referer: "https://megaplay.buzz/" },
     },
@@ -22,30 +30,11 @@ vi.mock("./megaPlay.js", () => ({
   isClientFetchableMedia: vi.fn(async () => true),
 }));
 
-vi.mock("./watchAnimeWorld.js", () => ({
-  resolveWatchAnimeWorldStreams: vi.fn(async () => [
-    {
-      url: "https://cdn.example.net/video/master.m3u8?token=abc",
-      title: "WatchAnimeWorld — Direct HLS",
-      quality: "AUTO",
-      headers: {
-        "User-Agent": "Mozilla/5.0",
-        Referer: "https://play.zephyrix.top/",
-        Accept: "*/*",
-        "X-Requested-With": "XMLHttpRequest",
-      },
-    },
-  ]),
-}));
-
 import { handleStreamRequest } from "./routes.js";
-import { isClientFetchableMedia, resolveMegaPlayStreams } from "./megaPlay.js";
-import { resolveWatchAnimeWorldStreams } from "./watchAnimeWorld.js";
+import { resolveBlakiteStreams } from "./blakite.js";
+import { resolveMegaPlayStreams } from "./megaPlay.js";
 
-type CapturedResponse = {
-  statusCode: number;
-  body: unknown;
-};
+type CapturedResponse = { statusCode: number; body: unknown };
 
 function makeResponse(): { response: Response; captured: CapturedResponse } {
   const captured: CapturedResponse = { statusCode: 200, body: undefined };
@@ -59,68 +48,39 @@ function makeResponse(): { response: Response; captured: CapturedResponse } {
       return response;
     },
   } as unknown as Response;
-
   return { response, captured };
 }
 
 describe("handleStreamRequest", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("accepts a request without X-App-Package and returns a one-item Nuvio array", async () => {
+  it("uses BlakiteAPI only for a Hindi request without X-App-Package", async () => {
     const { response, captured } = makeResponse();
     const request = {
-      query: { anilistId: "20", type: "tv", season: "1", episode: "1" },
+      query: { anilistId: "20", type: "tv", season: "1", episode: "1", audio: "hindi" },
       header: vi.fn(() => undefined),
     } as unknown as Request;
 
     await handleStreamRequest(request, response);
 
     expect(captured.statusCode).toBe(200);
-    expect(captured.body).toEqual([
-      {
-        name: "WatchAnimeWorld",
-        url: "https://cdn.example.net/video/master.m3u8?token=abc",
-        title: "WatchAnimeWorld — Direct HLS",
-        quality: "AUTO",
-        headers: {
-          "User-Agent": "Mozilla/5.0",
-          Referer: "https://play.zephyrix.top/",
-          Accept: "*/*",
-          "X-Requested-With": "XMLHttpRequest",
-        },
-      },
-    ]);
+    expect(captured.body).toEqual([expect.objectContaining({ name: "BlakiteAPI", quality: "480P" })]);
+    expect(vi.mocked(resolveBlakiteStreams)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(resolveMegaPlayStreams)).not.toHaveBeenCalled();
   });
 
-  it("filters a blocked Zephyrix source and falls back to the validated MegaPlay source", async () => {
-    vi.mocked(resolveWatchAnimeWorldStreams).mockResolvedValueOnce([
-      {
-        url: "https://play.zephyrix.top/cdn/hls/blocked/master.m3u8?token=expired",
-        title: "WatchAnimeWorld — Direct HLS",
-        quality: "AUTO",
-        headers: { "User-Agent": "Mozilla/5.0", Referer: "https://play.zephyrix.top/" },
-      },
-    ]);
-    vi.mocked(isClientFetchableMedia).mockImplementation(async url => !url.includes("/blocked/"));
-
+  it.each(["sub", "dub"] as const)("uses MegaPlay only for a %s request", async audio => {
     const { response, captured } = makeResponse();
     const request = {
-      query: { anilistId: "20", type: "tv", season: "1", episode: "1" },
+      query: { anilistId: "20", type: "tv", season: "1", episode: "1", audio },
       header: vi.fn(() => undefined),
     } as unknown as Request;
 
     await handleStreamRequest(request, response);
 
-    expect(vi.mocked(resolveMegaPlayStreams)).toHaveBeenCalledTimes(1);
     expect(captured.statusCode).toBe(200);
-    expect(captured.body).toEqual([
-      {
-        name: "MegaPlay",
-        url: "https://cdn.watching.onl/video/master.m3u8?token=abc",
-        title: "MegaPlay — sub",
-        quality: "AUTO",
-        headers: { "User-Agent": "Mozilla/5.0", Referer: "https://megaplay.buzz/" },
-      },
-    ]);
+    expect(captured.body).toEqual([expect.objectContaining({ name: "MegaPlay", quality: "AUTO" })]);
+    expect(vi.mocked(resolveMegaPlayStreams)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(resolveBlakiteStreams)).not.toHaveBeenCalled();
   });
 });

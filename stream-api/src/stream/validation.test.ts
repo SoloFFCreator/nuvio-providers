@@ -8,6 +8,7 @@ describe("parseStreamRequest", () => {
       anilistId: 20,
       malId: undefined,
       type: "tv",
+      audio: "sub",
       season: 1,
       episode: 1,
     });
@@ -18,6 +19,7 @@ describe("parseStreamRequest", () => {
       anilistId: undefined,
       malId: 5114,
       type: "movie",
+      audio: "sub",
       season: undefined,
       episode: undefined,
     });
@@ -29,5 +31,12 @@ describe("parseStreamRequest", () => {
       StreamApiError
     );
     expect(() => parseStreamRequest({ malId: "20", type: "tv" })).toThrow(StreamApiError);
+    expect(() => parseStreamRequest({ malId: "20", type: "movie", audio: "english" })).toThrow(StreamApiError);
+  });
+
+  it("accepts explicit Hindi, sub, and dub source preferences", () => {
+    expect(parseStreamRequest({ malId: "63316", type: "tv", season: "1", episode: "1", audio: "hindi" }).audio).toBe("hindi");
+    expect(parseStreamRequest({ malId: "63316", type: "tv", season: "1", episode: "1", audio: "sub" }).audio).toBe("sub");
+    expect(parseStreamRequest({ malId: "63316", type: "tv", season: "1", episode: "1", audio: "dub" }).audio).toBe("dub");
   });
 });

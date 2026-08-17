@@ -5,7 +5,6 @@ import { parseStreamRequest } from "./validation.js";
 import { toNuvioStreams } from "./compatibility.js";
 import { resolveBlakiteStreams } from "./blakite.js";
 import { resolveMegaPlayStreams, isClientFetchableMedia } from "./megaPlay.js";
-import { resolveWatchAnimeWorldStreams } from "./watchAnimeWorld.js";
 
 function sendError(res: Response, error: unknown): void {
   if (error instanceof StreamApiError) {
@@ -21,11 +20,9 @@ export async function handleStreamRequest(req: Request, res: Response): Promise<
   try {
     const request = parseStreamRequest(req.query as Record<string, unknown>);
     const metadata = await resolveMetadata({ anilistId: request.anilistId, malId: request.malId });
-    const resolvers = [
-      () => resolveBlakiteStreams(metadata, request),
-      () => resolveWatchAnimeWorldStreams(metadata, request),
-      () => resolveMegaPlayStreams(metadata, request),
-    ];
+    const resolvers = request.audio === "hindi"
+      ? [() => resolveBlakiteStreams(metadata, request)]
+      : [() => resolveMegaPlayStreams(metadata, request)];
 
     for (const resolveStreams of resolvers) {
       const streams = await resolveStreams().catch(() => []);
@@ -48,7 +45,9 @@ export async function handleStreamRequest(req: Request, res: Response): Promise<
     throw new StreamApiError(
       404,
       "streams_not_found",
-      "No client-fetchable direct playback stream was available from BlakiteAPI, WatchAnimeWorld, or MegaPlay."
+      request.audio === "hindi"
+        ? "No client-fetchable Hindi playback stream was available from BlakiteAPI."
+        : `No client-fetchable ${request.audio} playback stream was available from MegaPlay.`
     );
   } catch (error) {
     sendError(res, error);

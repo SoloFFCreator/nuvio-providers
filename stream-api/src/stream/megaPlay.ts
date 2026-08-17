@@ -246,21 +246,22 @@ export async function resolveMegaPlayStreams(
     throw new StreamApiError(400, "missing_episode", "TV requests require a positive episode value.");
   }
 
+  const language: "sub" | "dub" = request.audio === "dub" ? "dub" : "sub";
   const candidates = [
     request.anilistId
-      ? `${MEGAPLAY_BASE}/stream/ani/${request.anilistId}/${episode}/sub`
+      ? `${MEGAPLAY_BASE}/stream/ani/${request.anilistId}/${episode}/${language}`
       : null,
-    request.malId ? `${MEGAPLAY_BASE}/stream/mal/${request.malId}/${episode}/sub` : null,
+    request.malId ? `${MEGAPLAY_BASE}/stream/mal/${request.malId}/${episode}/${language}` : null,
   ].filter((url): url is string => Boolean(url));
 
   for (const playerUrl of candidates) {
-    const stream = await resolvePlayerStream(playerUrl, "sub");
+    const stream = await resolvePlayerStream(playerUrl, language);
     if (stream) return [stream];
   }
 
   const anikotoEpisodeId = await resolveAnikotoEpisodeId(_metadata, request);
   if (anikotoEpisodeId) {
-    const stream = await resolvePlayerIdStream(anikotoEpisodeId, "sub");
+    const stream = await resolvePlayerIdStream(anikotoEpisodeId, language);
     if (stream) return [stream];
   }
 

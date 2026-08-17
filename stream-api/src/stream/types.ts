@@ -1,4 +1,5 @@
 export type MediaType = "movie" | "tv";
+export type AudioPreference = "hindi" | "sub" | "dub";
 
 export type StreamHeaders = {
   "User-Agent": string;
@@ -26,6 +27,7 @@ export type StreamRequest = {
   anilistId?: number;
   malId?: number;
   type: MediaType;
+  audio: AudioPreference;
   season?: number;
   episode?: number;
 };
