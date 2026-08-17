@@ -5,18 +5,23 @@ function requiredPositiveInteger(value: unknown, field: string): number {
   if (typeof value !== "string" || !/^\d+$/.test(value)) {
     throw new StreamApiError(400, "invalid_query", `${field} must be a positive integer.`);
   }
-
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || parsed <= 0) {
     throw new StreamApiError(400, "invalid_query", `${field} must be a positive integer.`);
   }
-
   return parsed;
 }
 
 function optionalPositiveInteger(value: unknown, field: string): number | undefined {
+  return value === undefined ? undefined : requiredPositiveInteger(value, field);
+}
+
+function optionalImdbId(value: unknown): string | undefined {
   if (value === undefined) return undefined;
-  return requiredPositiveInteger(value, field);
+  if (typeof value !== "string" || !/^tt\d{5,12}$/i.test(value)) {
+    throw new StreamApiError(400, "invalid_query", "imdbId must have the form tt followed by 5 to 12 digits.");
+  }
+  return value.toLowerCase();
 }
 
 function parseAudioPreference(value: unknown): AudioPreference {
@@ -31,14 +36,16 @@ export function parseStreamRequest(query: Record<string, unknown>): StreamReques
     throw new StreamApiError(400, "invalid_type", "type must be exactly movie or tv.");
   }
 
-  const anilistId = optionalPositiveInteger(query.anilistId, "anilistId");
+  const tmdbId = optionalPositiveInteger(query.tmdbId, "tmdbId");
+  const imdbId = optionalImdbId(query.imdbId);
   const malId = optionalPositiveInteger(query.malId, "malId");
-  if (Number(anilistId !== undefined) + Number(malId !== undefined) !== 1) {
-    throw new StreamApiError(400, "invalid_identifier", "Provide exactly one identifier: anilistId or malId.");
+  if (Number(tmdbId !== undefined) + Number(imdbId !== undefined) + Number(malId !== undefined) !== 1) {
+    throw new StreamApiError(400, "invalid_identifier", "Provide exactly one identifier: tmdbId, imdbId, or malId.");
   }
 
   const request: StreamRequest = {
-    anilistId,
+    tmdbId,
+    imdbId,
     malId,
     type: type as MediaType,
     audio: parseAudioPreference(query.audio),
@@ -49,6 +56,5 @@ export function parseStreamRequest(query: Record<string, unknown>): StreamReques
   if (request.type === "tv" && (request.season === undefined || request.episode === undefined)) {
     throw new StreamApiError(400, "missing_episode", "TV requests require both season and episode.");
   }
-
   return request;
 }

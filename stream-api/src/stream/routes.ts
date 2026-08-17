@@ -19,7 +19,7 @@ function sendError(res: Response, error: unknown): void {
 export async function handleStreamRequest(req: Request, res: Response): Promise<void> {
   try {
     const request = parseStreamRequest(req.query as Record<string, unknown>);
-    const metadata = await resolveMetadata({ anilistId: request.anilistId, malId: request.malId });
+    const metadata = await resolveMetadata({ tmdbId: request.tmdbId, imdbId: request.imdbId, malId: request.malId, type: request.type });
     const resolvers = request.audio === "hindi"
       ? [() => resolveBlakiteStreams(metadata, request)]
       : [() => resolveMegaPlayStreams(metadata, request)];

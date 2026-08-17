@@ -63,6 +63,52 @@ function titleScore(candidate: string, requested: string): number {
   return 0;
 }
 
+type JikanSearchResponse = {
+  data?: Array<{
+    mal_id?: number;
+    title?: string;
+    title_english?: string | null;
+    title_japanese?: string | null;
+    titles?: Array<{ title?: string }>;
+  }>;
+};
+
+async function resolveInternalMalId(metadata: MediaMetadata, request: StreamRequest): Promise<number | null> {
+  let best: { id: number; score: number } | null = null;
+  const baseTitles = [metadata.primaryTitle, ...metadata.titles].filter(Boolean).slice(0, 4);
+  const seasonTitles = request.type === "tv" && request.season !== undefined && request.season > 1
+    ? baseTitles.map(title => `${title} Season ${request.season}`)
+    : [];
+  const titles = [...seasonTitles, ...baseTitles];
+  for (const title of titles) {
+    const response = await fetchWithTimeout(
+      `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(title)}&limit=8`,
+      { headers: { Accept: "application/json", "User-Agent": USER_AGENT } }
+    );
+    if (!response?.ok) continue;
+
+    try {
+      const payload = (await response.json()) as JikanSearchResponse;
+      for (const anime of payload.data ?? []) {
+        if (!anime.mal_id) continue;
+        const candidateTitles = [
+          anime.title_english,
+          anime.title,
+          anime.title_japanese,
+          ...(anime.titles?.map(entry => entry.title) ?? []),
+        ].filter(Boolean) as string[];
+        const score = Math.max(0, ...candidateTitles.flatMap(candidate => titles.map(requested => titleScore(candidate, requested))));
+        if (score > (best?.score ?? 0)) best = { id: anime.mal_id, score };
+      }
+    } catch {
+      // Continue to the next title or use the Anikoto fallback below.
+    }
+    if (best?.score !== undefined && best.score >= 80) break;
+  }
+
+  return best && best.score >= 80 ? best.id : null;
+}
+
 async function resolveAnikotoEpisodeId(
   metadata: MediaMetadata,
   request: StreamRequest
@@ -83,51 +129,32 @@ async function resolveAnikotoEpisodeId(
       if (!href) continue;
       const candidateTitle = ($(element).attr("data-jp") || $(element).text()).trim();
       const score = titleScore(candidateTitle, title);
-      if (score > (best?.score ?? 0)) {
-        best = { title: candidateTitle, url: new URL(href, ANIKOTO_SITE).toString(), score };
-      }
+      if (score > (best?.score ?? 0)) best = { title: candidateTitle, url: new URL(href, ANIKOTO_SITE).toString(), score };
     }
-
-    if (best && best.score === 100) break;
+    if (best?.score !== undefined && best.score >= 80) break;
   }
 
-  if (!best) return null;
-
+  if (!best || best.score < 80) return null;
   const watchResponse = await fetchWithTimeout(best.url, {
     headers: { "User-Agent": USER_AGENT, Accept: "text/html", Referer: `${ANIKOTO_SITE}/` },
   });
   if (!watchResponse?.ok) return null;
 
-  const watchHtml = await watchResponse.text();
-  const watchId = cheerio.load(watchHtml)("#watch-main").attr("data-id");
+  const watchId = cheerio.load(await watchResponse.text())("#watch-main").attr("data-id");
   if (!watchId) return null;
-
   const seriesResponse = await fetchWithTimeout(`${ANIKOTO_API}/series/${encodeURIComponent(watchId)}`, {
     headers: { "User-Agent": USER_AGENT, Accept: "application/json", Referer: `${ANIKOTO_SITE}/` },
   });
   if (!seriesResponse?.ok) return null;
 
   try {
-    const payload = (await seriesResponse.json()) as {
-      data?: {
-        anime?: { ani_id?: number | string; mal_id?: number | string };
-        episodes?: Array<Record<string, unknown>>;
-      };
-    };
-    const anime = payload.data?.anime;
-    const id = request.anilistId ?? request.malId;
-    const matchedExternalId = request.anilistId
-      ? String(anime?.ani_id ?? "") === String(id)
-      : String(anime?.mal_id ?? "") === String(id);
-    if (!matchedExternalId) return null;
-
+    const payload = (await seriesResponse.json()) as { data?: { episodes?: Array<Record<string, unknown>> } };
     const episodes = payload.data?.episodes ?? [];
     const targetEpisode = request.type === "movie" ? 1 : request.episode;
-    const chosen =
-      episodes.find(episode => {
-        const number = episode.number ?? episode.episode_number ?? episode.ep_num;
-        return Number(number) === targetEpisode;
-      }) ?? (targetEpisode && targetEpisode > 0 ? episodes[targetEpisode - 1] : undefined);
+    const chosen = episodes.find(episode => {
+      const number = episode.number ?? episode.episode_number ?? episode.ep_num;
+      return Number(number) === targetEpisode;
+    }) ?? (targetEpisode && targetEpisode > 0 ? episodes[targetEpisode - 1] : undefined);
     const embedId = chosen?.episode_embed_id ?? chosen?.embed_id ?? chosen?.id;
     return embedId ? String(embedId) : null;
   } catch {
@@ -238,7 +265,7 @@ async function resolvePlayerIdStream(
 }
 
 export async function resolveMegaPlayStreams(
-  _metadata: MediaMetadata,
+  metadata: MediaMetadata,
   request: StreamRequest
 ): Promise<DirectStream[]> {
   const episode = request.type === "movie" ? 1 : request.episode;
@@ -247,23 +274,15 @@ export async function resolveMegaPlayStreams(
   }
 
   const language: "sub" | "dub" = request.audio === "dub" ? "dub" : "sub";
-  const candidates = [
-    request.anilistId
-      ? `${MEGAPLAY_BASE}/stream/ani/${request.anilistId}/${episode}/${language}`
-      : null,
-    request.malId ? `${MEGAPLAY_BASE}/stream/mal/${request.malId}/${episode}/${language}` : null,
-  ].filter((url): url is string => Boolean(url));
-
-  for (const playerUrl of candidates) {
-    const stream = await resolvePlayerStream(playerUrl, language);
-    if (stream) return [stream];
+  const malIdToUse = request.malId ?? (await resolveInternalMalId(metadata, request));
+  if (malIdToUse) {
+    const directPlayerUrl = `${MEGAPLAY_BASE}/stream/mal/${malIdToUse}/${episode}/${language}`;
+    const directStream = await resolvePlayerStream(directPlayerUrl, language);
+    if (directStream) return [directStream];
   }
+  const anikotoEpisodeId = await resolveAnikotoEpisodeId(metadata, request);
+  if (!anikotoEpisodeId) return [];
 
-  const anikotoEpisodeId = await resolveAnikotoEpisodeId(_metadata, request);
-  if (anikotoEpisodeId) {
-    const stream = await resolvePlayerIdStream(anikotoEpisodeId, language);
-    if (stream) return [stream];
-  }
-
-  return [];
+  const stream = await resolvePlayerIdStream(anikotoEpisodeId, language);
+  return stream ? [stream] : [];
 }

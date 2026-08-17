@@ -24,8 +24,9 @@ export type MediaMetadata = {
 };
 
 export type StreamRequest = {
-  anilistId?: number;
   malId?: number;
+  tmdbId?: number;
+  imdbId?: string;
   type: MediaType;
   audio: AudioPreference;
   season?: number;

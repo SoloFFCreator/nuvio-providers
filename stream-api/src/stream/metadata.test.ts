@@ -1,68 +1,42 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { StreamApiError } from "./errors";
-import { resolveAniListMetadata, resolveMalMetadata } from "./metadata";
+import { StreamApiError } from "./errors.js";
+import { resolveImdbMetadata, resolveMetadata, resolveTmdbMetadata } from "./metadata.js";
 
 function mockJsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
+  return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
-describe("anime metadata resolution", () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
+function mockHtmlResponse(body: string, status = 200): Response {
+  return new Response(body, { status, headers: { "Content-Type": "text/html" } });
+}
 
-  it("uses AniList title variants for WatchAnimeWorld matching", async () => {
+describe("TMDB and IMDb metadata resolution", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("extracts a title from a public TMDB detail page", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      mockJsonResponse({
-        data: {
-          Media: {
-            title: { english: "Naruto", romaji: "Naruto", native: "ナルト" },
-            synonyms: ["Naruto TV"],
-          },
-        },
-      })
+      mockHtmlResponse('<meta property="og:title" content="Lookism">')
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(resolveAniListMetadata(20)).resolves.toEqual({
-      primaryTitle: "Naruto",
-      titles: ["Naruto", "ナルト", "Naruto TV"],
-    });
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://graphql.anilist.co",
-      expect.objectContaining({ method: "POST" })
-    );
+    await expect(resolveTmdbMetadata(210942, "tv")).resolves.toEqual({ primaryTitle: "Lookism", titles: ["Lookism"] });
+    expect(fetchMock).toHaveBeenCalledWith("https://www.themoviedb.org/tv/210942?language=en-US", expect.any(Object));
   });
 
-  it("uses MAL title variants for WatchAnimeWorld matching", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      mockJsonResponse({
-        data: {
-          title: "Naruto",
-          title_english: "Naruto",
-          title_japanese: "ナルト",
-          titles: [{ title: "Naruto" }, { title: "Naruto TV" }],
-        },
-      })
-    );
+  it("resolves an IMDb suggestion record and dispatches a TMDB request", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(mockJsonResponse({ d: [{ id: "tt22297722", l: "Lookism" }] }))
+      .mockResolvedValueOnce(mockHtmlResponse('<meta content="Solo Leveling" property="og:title">'));
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(resolveMalMetadata(20)).resolves.toEqual({
-      primaryTitle: "Naruto",
-      titles: ["Naruto", "ナルト", "Naruto TV"],
-    });
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.jikan.moe/v4/anime/20/full",
-      expect.any(Object)
-    );
+    await expect(resolveImdbMetadata("tt22297722")).resolves.toEqual({ primaryTitle: "Lookism", titles: ["Lookism"] });
+    await expect(resolveMetadata({ tmdbId: 127532, type: "tv" })).resolves.toEqual({ primaryTitle: "Solo Leveling", titles: ["Solo Leveling"] });
   });
 
-  it("returns a controlled lookup error when the upstream metadata request fails", async () => {
+  it("rejects zero, mixed, and unavailable identifier metadata", async () => {
+    await expect(resolveMetadata({ type: "tv" })).rejects.toBeInstanceOf(StreamApiError);
+    await expect(resolveMetadata({ tmdbId: 210942, imdbId: "tt22297722", type: "tv" })).rejects.toBeInstanceOf(StreamApiError);
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(mockJsonResponse({ error: "not found" }, 404)));
-
-    await expect(resolveAniListMetadata(999999999)).rejects.toBeInstanceOf(StreamApiError);
+    await expect(resolveImdbMetadata("tt22297722")).rejects.toBeInstanceOf(StreamApiError);
   });
 });
