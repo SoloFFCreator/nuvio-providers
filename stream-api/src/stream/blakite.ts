@@ -129,6 +129,13 @@ export function buildBlakiteHlsUrl(dataId: string, ranges: string, preferredQual
     url: `${RUMBLE_MEDIA_BASE}/${dataId}.${selected.suffix}.tar?r_file=chunklist.m3u8&r_type=application%2Fvnd.apple.mpegurl&r_range=${selected.range}`,
   };
 }
+export function buildBlakiteMp4Url(dataId: string, preferredQuality = "480p"): { url: string; quality: string } | null {
+  const quality = preferredQuality.toLowerCase();
+  const suffix = QUALITY_SUFFIX[quality];
+  if (!suffix || !/^[A-Za-z0-9/]+$/.test(dataId)) return null;
+  return { quality, url: `${RUMBLE_MEDIA_BASE}/${dataId}.${suffix}.mp4` };
+}
+
 
 export async function resolveBlakiteStreams(metadata: MediaMetadata, request: StreamRequest): Promise<DirectStream[]> {
   const entry = await findCatalogEntry(metadata, request);
@@ -145,8 +152,13 @@ export async function resolveBlakiteStreams(metadata: MediaMetadata, request: St
   try {
     const payload = (await response.json()) as BlakiteResponse;
     const source = payload.data;
-    if (!payload.success || !source?.dataId || source.format !== "M3U8" || !source.ranges) return [];
-    const direct = buildBlakiteHlsUrl(source.dataId, source.ranges, source.quality ?? "480p");
+    if (!payload.success || !source?.dataId) return [];
+    const format = source.format?.toUpperCase();
+    const direct = format === "M3U8" && source.ranges
+      ? buildBlakiteHlsUrl(source.dataId, source.ranges, source.quality ?? "480p")
+      : format === "MP4"
+        ? buildBlakiteMp4Url(source.dataId, source.quality ?? "480p")
+        : null;
     if (!direct || !(await isClientFetchableMedia(direct.url, PLAYBACK_HEADERS))) return [];
     return [{
       name: "BlakiteAPI",

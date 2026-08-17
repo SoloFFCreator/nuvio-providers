@@ -4,7 +4,7 @@ vi.mock("./megaPlay.js", () => ({
   isClientFetchableMedia: vi.fn(async () => true),
 }));
 
-import { buildBlakiteHlsUrl, resetBlakiteCacheForTests, resolveBlakiteStreams } from "./blakite.js";
+import { buildBlakiteHlsUrl, buildBlakiteMp4Url, resetBlakiteCacheForTests, resolveBlakiteStreams } from "./blakite.js";
 
 const ranges = [
   "38541312-38554938 (240p)",
@@ -56,5 +56,37 @@ describe("BlakiteAPI resolver", () => {
       headers: expect.objectContaining({ Referer: "https://blakiteapi.xyz/", Origin: "https://blakiteapi.xyz" }),
     }]);
   });
-});
 
+  it("constructs and returns a health-checked direct MP4 for a Lookism-style provider payload", async () => {
+    expect(buildBlakiteMp4Url("fww1/e1/s8/2/Y/R/y/x/YRyxy", "480p")).toEqual({
+      quality: "480p",
+      url: "https://hugh.cdn.rumble.cloud/video/fww1/e1/s8/2/Y/R/y/x/YRyxy.caa.mp4",
+    });
+    expect(buildBlakiteMp4Url("invalid?data", "480p")).toBeNull();
+
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith("/api/getAllAnime.php")) {
+        return new Response(JSON.stringify({
+          success: true,
+          data: { movies: {}, series: { "210942": { tmdbId: "210942", title: "Lookism (Hindi Dubbed)", language: "ORG", type: "Series" } } },
+        }), { status: 200 });
+      }
+      expect(url).toBe("https://blakiteapi.xyz/api/get.php?id=1-1&tmdbId=210942");
+      return new Response(JSON.stringify({
+        success: true,
+        data: { animeTitle: "Lookism (Hindi Dubbed)", dataId: "fww1/e1/s8/2/Y/R/y/x/YRyxy", format: "MP4", quality: "480p" },
+      }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(resolveBlakiteStreams(
+      { primaryTitle: "Lookism", titles: ["Lookism", "Oemojisangjuui"] },
+      { anilistId: 158539, type: "tv", audio: "hindi", season: 1, episode: 1 }
+    )).resolves.toEqual([expect.objectContaining({
+      name: "BlakiteAPI",
+      url: "https://hugh.cdn.rumble.cloud/video/fww1/e1/s8/2/Y/R/y/x/YRyxy.caa.mp4",
+      title: "BlakiteAPI — Hindi — 480p",
+      quality: "480P",
+    })]);
+  });
+});
