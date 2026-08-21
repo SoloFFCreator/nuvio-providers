@@ -1,31 +1,43 @@
 import { describe, expect, it } from "vitest";
-import { toNuvioStreams } from "./compatibility.js";
+import { toNuvioStreams } from "./compatibility";
 
-const directStream = {
+const hlsStream = {
   url: "https://cdn.example.net/video/master.m3u8?token=abc",
-  title: "WatchAnimeWorld — Direct HLS",
+  title: "Provider — Direct HLS",
   quality: "AUTO",
   headers: {
     "User-Agent": "Mozilla/5.0",
-    Referer: "https://play.zephyrix.top/",
+    Referer: "https://provider.example/",
   },
 };
 
 describe("toNuvioStreams", () => {
-  it("keeps a single source as a one-item array with the required name", () => {
-    const result = toNuvioStreams([directStream]);
+  it("keeps a single HLS source as a one-item array with ExoPlayer format metadata", () => {
+    const result = toNuvioStreams([hlsStream]);
 
     expect(Array.isArray(result)).toBe(true);
     expect(result).toHaveLength(1);
-    expect(result[0]).toEqual({ ...directStream, name: "WatchAnimeWorld" });
+    expect(result[0]).toEqual({
+      ...hlsStream,
+      name: "WatchAnimeWorld",
+      format: "hls",
+      mimeType: "application/x-mpegURL",
+      headers: { ...hlsStream.headers, Accept: "*/*" },
+    });
   });
 
-  it("preserves all direct source fields for multiple sources", () => {
-    const second = { ...directStream, url: "https://cdn.example.net/video/video.mp4" };
-    const result = toNuvioStreams([directStream, second]);
+  it("marks direct MP4 sources as progressive without overriding caller headers", () => {
+    const mp4 = {
+      ...hlsStream,
+      url: "https://cdn.example.net/video/video.mp4",
+      headers: { ...hlsStream.headers, Accept: "*/*" },
+    };
+    const result = toNuvioStreams([mp4]);
 
-    expect(result).toHaveLength(2);
-    expect(result.every(stream => stream.name === "WatchAnimeWorld")).toBe(true);
-    expect(result.map(stream => stream.url)).toEqual([directStream.url, second.url]);
+    expect(result[0]).toMatchObject({
+      format: "progressive",
+      mimeType: "video/mp4",
+      headers: mp4.headers,
+    });
   });
 });
