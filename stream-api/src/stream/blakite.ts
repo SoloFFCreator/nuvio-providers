@@ -129,7 +129,7 @@ function selectRange(ranges: string, quality: string): { quality: string; range:
 
 export function buildBlakiteHlsUrl(dataId: string, ranges: string, preferredQuality = "480p"): { url: string; quality: string } | null {
   const selected = selectRange(ranges, preferredQuality);
-  if (!selected || !/^[A-Za-z0-9/]+$/.test(dataId)) return null;
+  if (!selected || !/^[A-Za-z0-9/_-]+$/.test(dataId)) return null;
   return {
     quality: selected.quality,
     url: `${RUMBLE_MEDIA_BASE}/${dataId}.${selected.suffix}.tar?r_file=chunklist.m3u8&r_type=application%2Fvnd.apple.mpegurl&r_range=${selected.range}`,
@@ -138,7 +138,7 @@ export function buildBlakiteHlsUrl(dataId: string, ranges: string, preferredQual
 export function buildBlakiteMp4Url(dataId: string, preferredQuality = "480p"): { url: string; quality: string } | null {
   const quality = preferredQuality.toLowerCase();
   const suffix = QUALITY_SUFFIX[quality];
-  if (!suffix || !/^[A-Za-z0-9/]+$/.test(dataId)) return null;
+  if (!suffix || !/^[A-Za-z0-9/_-]+$/.test(dataId)) return null;
   return { quality, url: `${RUMBLE_MEDIA_BASE}/${dataId}.${suffix}.mp4` };
 }
 

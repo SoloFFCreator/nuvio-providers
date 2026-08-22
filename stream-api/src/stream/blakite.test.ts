@@ -25,6 +25,10 @@ describe("BlakiteAPI resolver", () => {
       quality: "480p",
       url: "https://hugh.cdn.rumble.cloud/video/fwe2/00/s8/2/Q/o/T/J/QoTJA.caa.tar?r_file=chunklist.m3u8&r_type=application%2Fvnd.apple.mpegurl&r_range=181623808-181637614",
     });
+    expect(buildBlakiteHlsUrl("fww1/72/s8/2/-/9/_/Q/-9_Qz", ranges, "480p")).toEqual({
+      quality: "480p",
+      url: "https://hugh.cdn.rumble.cloud/video/fww1/72/s8/2/-/9/_/Q/-9_Qz.caa.tar?r_file=chunklist.m3u8&r_type=application%2Fvnd.apple.mpegurl&r_range=181623808-181637614",
+    });
     expect(buildBlakiteHlsUrl("invalid?data", ranges)).toBeNull();
   });
 
@@ -61,6 +65,10 @@ describe("BlakiteAPI resolver", () => {
     expect(buildBlakiteMp4Url("fww1/e1/s8/2/Y/R/y/x/YRyxy", "480p")).toEqual({
       quality: "480p",
       url: "https://hugh.cdn.rumble.cloud/video/fww1/e1/s8/2/Y/R/y/x/YRyxy.caa.mp4",
+    });
+    expect(buildBlakiteMp4Url("fww1/72/s8/2/-/9/_/Q/-9_Qz", "480p")).toEqual({
+      quality: "480p",
+      url: "https://hugh.cdn.rumble.cloud/video/fww1/72/s8/2/-/9/_/Q/-9_Qz.caa.mp4",
     });
     expect(buildBlakiteMp4Url("invalid?data", "480p")).toBeNull();
 
