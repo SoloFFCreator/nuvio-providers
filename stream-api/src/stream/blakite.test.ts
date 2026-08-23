@@ -61,6 +61,31 @@ describe("BlakiteAPI resolver", () => {
     }]);
   });
 
+  it("matches the canonical TMDB ID when Blakite stores a zero-padded provider ID", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith("/api/getAllAnime.php")) {
+        return new Response(JSON.stringify({
+          success: true,
+          data: { movies: {}, series: { "105009": { tmdbId: "0105009", originalTmdbId: "105009", title: "Tokyo Revengers (Hindi Fan Dubbed)", language: "Fandub", type: "Series" } } },
+        }), { status: 200 });
+      }
+      expect(url).toBe("https://blakiteapi.xyz/api/get.php?id=1-1&tmdbId=0105009");
+      return new Response(JSON.stringify({
+        success: true,
+        data: { animeTitle: "Tokyo Revengers (Hindi Fan Dubbed)", dataId: "fww1/d3/s8/2/p/x/o/Z/pxoZy", format: "M3U8", quality: "480p", ranges },
+      }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(resolveBlakiteStreams(
+      { primaryTitle: "Unrelated localized title", titles: ["Unrelated localized title"] },
+      { tmdbId: 105009, type: "tv", audio: "hindi", season: 1, episode: 1 }
+    )).resolves.toEqual([expect.objectContaining({
+      name: "BlakiteAPI",
+      url: expect.stringContaining("/fww1/d3/s8/2/p/x/o/Z/pxoZy.caa.tar"),
+    })]);
+  });
+
   it("constructs and returns a health-checked direct MP4 for a Lookism-style provider payload", async () => {
     expect(buildBlakiteMp4Url("fww1/e1/s8/2/Y/R/y/x/YRyxy", "480p")).toEqual({
       quality: "480p",

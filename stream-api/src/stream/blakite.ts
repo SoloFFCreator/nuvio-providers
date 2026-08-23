@@ -28,6 +28,7 @@ const QUALITY_SUFFIX: Record<string, string> = {
 
 type CatalogEntry = {
   tmdbId?: string | number;
+  originalTmdbId?: string | number;
   title?: string;
   language?: string;
   type?: string;
@@ -95,14 +96,22 @@ function matchesRequestType(entry: CatalogEntry, request: StreamRequest): boolea
   return request.type === "movie" ? type === "movie" : type === "series";
 }
 
+function matchesTmdbId(value: string | number | undefined, requestedId: number): boolean {
+  if (value === undefined) return false;
+  return String(value).replace(/^0+(?=\d)/, "") === String(requestedId);
+}
+
 async function findCatalogEntry(metadata: MediaMetadata, request: StreamRequest): Promise<CatalogEntry | null> {
   const entries = await getCatalogEntries();
-  const exactTmdbEntry = request.tmdbId === undefined ? undefined : entries.find(entry =>
-    String(entry.tmdbId ?? "") === String(request.tmdbId) &&
-    matchesRequestType(entry, request) &&
-    /hindi|org/i.test(`${entry.title ?? ""} ${entry.language ?? ""}`)
-  );
-  if (exactTmdbEntry) return exactTmdbEntry;
+  const requestedTmdbId = request.tmdbId;
+  if (requestedTmdbId !== undefined) {
+    const exactTmdbEntry = entries.find(entry =>
+      (matchesTmdbId(entry.tmdbId, requestedTmdbId) || matchesTmdbId(entry.originalTmdbId, requestedTmdbId)) &&
+      matchesRequestType(entry, request) &&
+      /hindi|org/i.test(`${entry.title ?? ""} ${entry.language ?? ""}`)
+    );
+    if (exactTmdbEntry) return exactTmdbEntry;
+  }
   const titles = [metadata.primaryTitle, ...metadata.titles].filter(Boolean).slice(0, 8);
   let best: { entry: CatalogEntry; score: number } | null = null;
 
