@@ -1,4 +1,5 @@
 import * as cheerio from "cheerio";
+import { createDecipheriv } from "node:crypto";
 import { StreamApiError } from "./errors.js";
 import { isDirectPlaybackUrl } from "./watchAnimeWorld.js";
 import type { DirectStream, MediaMetadata, StreamRequest, StreamHeaders } from "./types.js";
@@ -21,7 +22,11 @@ const MEDIA_HEADERS: StreamHeaders = {
 
 type SourceResponse = {
   sources?: { file?: string };
+  enc?: string;
 };
+
+const SOURCE_TOKEN_KEY = "i?LMTAx0Q6,:}50U";
+const SOURCE_TOKEN_IV = "W0;27ToaUpl_P%'c";
 
 async function fetchWithTimeout(url: string, init: RequestInit = {}): Promise<Response | null> {
   try {
@@ -170,7 +175,7 @@ async function resolveSourceFile(playerId: string): Promise<string | null> {
 
     try {
       const payload = (await response.json()) as SourceResponse;
-      const file = payload.sources?.file;
+      const file = payload.sources?.file ?? decodeSourceToken(payload.enc);
       if (file && isDirectPlaybackUrl(file)) return file;
     } catch {
       // Try the legacy source endpoint if the first response is not JSON.
@@ -178,6 +183,23 @@ async function resolveSourceFile(playerId: string): Promise<string | null> {
   }
 
   return null;
+}
+
+function decodeSourceToken(token: string | undefined): string | null {
+  if (!token) return null;
+
+  try {
+    const normalized = token.replace(/-/g, "+").replace(/_/g, "/");
+    const encrypted = Buffer.from(normalized + "=".repeat((4 - (normalized.length % 4)) % 4), "base64");
+    const key = Buffer.alloc(32);
+    Buffer.from(SOURCE_TOKEN_KEY).copy(key);
+    const decipher = createDecipheriv("aes-256-cbc", key, Buffer.from(SOURCE_TOKEN_IV));
+    const decoded = Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
+    const file = (JSON.parse(decoded) as { file?: unknown }).file;
+    return typeof file === "string" ? file : null;
+  } catch {
+    return null;
+  }
 }
 
 async function fetchFirstHlsResource(

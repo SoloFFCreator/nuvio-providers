@@ -1,3 +1,4 @@
+import { createCipheriv } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { isClientFetchableMedia, resolveMegaPlayStreams } from "./megaPlay.js";
 
@@ -21,6 +22,18 @@ function jikanSearchResponse(): Response {
   return new Response(JSON.stringify({
     data: [{ mal_id: 58567, title: "Ore dake Level Up na Ken Season 2: Arise from the Shadow", title_english: "Solo Leveling Season 2: Arise from the Shadow" }],
   }), { status: 200, headers: { "content-type": "application/json" } });
+}
+
+function encryptedSourceResponse(file: string): Response {
+  const key = Buffer.alloc(32);
+  Buffer.from("i?LMTAx0Q6,:}50U").copy(key);
+  const cipher = createCipheriv("aes-256-cbc", key, Buffer.from("W0;27ToaUpl_P%'c"));
+  const token = Buffer.concat([cipher.update(JSON.stringify({ file })), cipher.final()])
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+  return new Response(JSON.stringify({ enc: token }), { status: 200, headers: { "content-type": "application/json" } });
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -55,6 +68,21 @@ describe("MegaPlay resolver with internal MAL bridge", () => {
       expect.objectContaining({ name: "MegaPlay", title: "MegaPlay — dub", url: mediaUrl }),
     ]);
     expect(String(fetchMock.mock.calls[1]?.[0])).toContain("/mal/58567/1/dub");
+  });
+
+  it("supports the current encrypted direct-file response", async () => {
+    const mediaUrl = "https://fetch.nexabloom.top/anime/test/master.m3u8";
+    const fetchMock = mockFetch([
+      jikanSearchResponse(),
+      new Response('<div id="megaplay-player" data-id="player-current"></div>', { status: 200 }),
+      encryptedSourceResponse(mediaUrl),
+      new Response("#EXTM3U\n#EXT-X-VERSION:3", { status: 200, headers: { "content-type": "application/vnd.apple.mpegurl" } }),
+    ]);
+
+    await expect(resolveMegaPlayStreams(metadata, request)).resolves.toEqual([
+      expect.objectContaining({ name: "MegaPlay", url: mediaUrl }),
+    ]);
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain("getSourcesNew");
   });
 
   it("validates the first child playlist and media segment", async () => {
