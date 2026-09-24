@@ -5,6 +5,7 @@ import { parseStreamRequest } from "./validation.js";
 import { toNuvioStreams } from "./compatibility.js";
 import { resolveBlakiteStreams } from "./blakite.js";
 import { resolveMegaPlayStreams, isClientFetchableMedia } from "./megaPlay.js";
+import { resolveMegaVidStreams } from "./megaVid.js";
 
 function sendError(res: Response, error: unknown): void {
   if (error instanceof StreamApiError) {
@@ -22,7 +23,10 @@ export async function handleStreamRequest(req: Request, res: Response): Promise<
     const metadata = await resolveMetadata({ tmdbId: request.tmdbId, imdbId: request.imdbId, malId: request.malId, type: request.type });
     const resolvers = request.audio === "hindi"
       ? [() => resolveBlakiteStreams(metadata, request)]
-      : [() => resolveMegaPlayStreams(metadata, request)];
+      : [
+          () => resolveMegaPlayStreams(metadata, request),
+          () => resolveMegaVidStreams(metadata, request),
+        ];
 
     for (const resolveStreams of resolvers) {
       const streams = await resolveStreams().catch(() => []);
@@ -47,7 +51,7 @@ export async function handleStreamRequest(req: Request, res: Response): Promise<
       "streams_not_found",
       request.audio === "hindi"
         ? "No client-fetchable Hindi playback stream was available from BlakiteAPI."
-        : `No client-fetchable ${request.audio} playback stream was available from MegaPlay.`
+        : `No client-fetchable ${request.audio} playback stream was available from MegaPlay or MegaVid.`
     );
   } catch (error) {
     sendError(res, error);
