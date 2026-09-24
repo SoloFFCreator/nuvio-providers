@@ -30,9 +30,22 @@ vi.mock("./megaPlay.js", () => ({
   isClientFetchableMedia: vi.fn(async () => true),
 }));
 
+vi.mock("./megaVid.js", () => ({
+  resolveMegaVidStreams: vi.fn(async () => [
+    {
+      name: "MegaVid",
+      url: "https://megavid.buzz/vid/token/secret/master.m3u8",
+      title: "MegaVid — requested audio",
+      quality: "AUTO",
+      headers: { "User-Agent": "Mozilla/5.0", Referer: "https://megavid.buzz/", Origin: "https://megavid.buzz" },
+    },
+  ]),
+}));
+
 import { handleStreamRequest } from "./routes.js";
 import { resolveBlakiteStreams } from "./blakite.js";
 import { resolveMegaPlayStreams } from "./megaPlay.js";
+import { resolveMegaVidStreams } from "./megaVid.js";
 
 type CapturedResponse = { statusCode: number; body: unknown };
 
@@ -69,7 +82,7 @@ describe("handleStreamRequest", () => {
     expect(vi.mocked(resolveMegaPlayStreams)).not.toHaveBeenCalled();
   });
 
-  it.each(["sub", "dub"] as const)("uses MegaPlay only for a %s request", async audio => {
+  it.each(["sub", "dub"] as const)("uses MegaVid first for a %s request", async audio => {
     const { response, captured } = makeResponse();
     const request = {
       query: { tmdbId: "210942", type: "tv", season: "1", episode: "1", audio },
@@ -79,8 +92,25 @@ describe("handleStreamRequest", () => {
     await handleStreamRequest(request, response);
 
     expect(captured.statusCode).toBe(200);
-    expect(captured.body).toEqual([expect.objectContaining({ name: "MegaPlay", quality: "AUTO" })]);
-    expect(vi.mocked(resolveMegaPlayStreams)).toHaveBeenCalledTimes(1);
+    expect(captured.body).toEqual([expect.objectContaining({ name: "MegaVid", quality: "AUTO" })]);
+    expect(vi.mocked(resolveMegaVidStreams)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(resolveMegaPlayStreams)).not.toHaveBeenCalled();
     expect(vi.mocked(resolveBlakiteStreams)).not.toHaveBeenCalled();
+  });
+
+  it("falls back to MegaPlay when MegaVid returns no stream", async () => {
+    vi.mocked(resolveMegaVidStreams).mockResolvedValueOnce([]);
+    const { response, captured } = makeResponse();
+    const request = {
+      query: { tmdbId: "210942", type: "tv", season: "1", episode: "1", audio: "sub" },
+      header: vi.fn(() => undefined),
+    } as unknown as Request;
+
+    await handleStreamRequest(request, response);
+
+    expect(captured.statusCode).toBe(200);
+    expect(captured.body).toEqual([expect.objectContaining({ name: "MegaPlay", quality: "AUTO" })]);
+    expect(vi.mocked(resolveMegaVidStreams)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(resolveMegaPlayStreams)).toHaveBeenCalledTimes(1);
   });
 });

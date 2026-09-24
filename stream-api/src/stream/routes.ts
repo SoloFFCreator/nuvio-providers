@@ -24,8 +24,8 @@ export async function handleStreamRequest(req: Request, res: Response): Promise<
     const resolvers = request.audio === "hindi"
       ? [() => resolveBlakiteStreams(metadata, request)]
       : [
-          () => resolveMegaPlayStreams(metadata, request),
           () => resolveMegaVidStreams(metadata, request),
+          () => resolveMegaPlayStreams(metadata, request),
         ];
 
     for (const resolveStreams of resolvers) {
@@ -51,7 +51,7 @@ export async function handleStreamRequest(req: Request, res: Response): Promise<
       "streams_not_found",
       request.audio === "hindi"
         ? "No client-fetchable Hindi playback stream was available from BlakiteAPI."
-        : `No client-fetchable ${request.audio} playback stream was available from MegaPlay or MegaVid.`
+        : `No client-fetchable ${request.audio} playback stream was available from MegaVid or MegaPlay.`
     );
   } catch (error) {
     sendError(res, error);

@@ -1,4 +1,5 @@
 import { isDirectPlaybackUrl } from "./watchAnimeWorld.js";
+import { resolveInternalMalId } from "./megaPlay.js";
 import type { DirectStream, MediaMetadata, StreamRequest, StreamHeaders } from "./types.js";
 
 const MEGAVID_BASE = "https://megavid.buzz";
@@ -31,14 +32,20 @@ async function fetchWithTimeout(url: string): Promise<Response | null> {
 }
 
 export async function resolveMegaVidStreams(
-  _metadata: MediaMetadata,
+  metadata: MediaMetadata,
   request: StreamRequest,
 ): Promise<DirectStream[]> {
-  if (request.malId === undefined || request.episode === undefined) return [];
+  const malId = request.malId ?? (
+    request.tmdbId !== undefined || request.imdbId !== undefined
+      ? await resolveInternalMalId(metadata, request)
+      : undefined
+  );
+  const episode = request.type === "movie" ? 1 : request.episode;
+  if (malId === undefined || episode === undefined) return [];
 
   const language = request.audio === "dub" ? "dub" : "sub";
   const response = await fetchWithTimeout(
-    `${MEGAVID_BASE}/api/mal/${request.malId}/${request.episode}/${language}`,
+    `${MEGAVID_BASE}/api/mal/${malId}/${episode}/${language}`,
   );
   if (!response?.ok) return [];
 

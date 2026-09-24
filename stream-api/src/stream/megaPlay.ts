@@ -78,7 +78,7 @@ type JikanSearchResponse = {
   }>;
 };
 
-async function resolveInternalMalId(metadata: MediaMetadata, request: StreamRequest): Promise<number | null> {
+export async function resolveInternalMalId(metadata: MediaMetadata, request: StreamRequest): Promise<number | null> {
   let best: { id: number; score: number } | null = null;
   const baseTitles = [metadata.primaryTitle, ...metadata.titles].filter(Boolean).slice(0, 4);
   const seasonTitles = request.type === "tv" && request.season !== undefined && request.season > 1

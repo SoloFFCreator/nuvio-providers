@@ -1,0 +1,56 @@
+name: Stream API CI and deploy
+
+on:
+  push:
+    branches:
+      - template
+  pull_request:
+    paths:
+      - "stream-api/**"
+      - ".github/workflows/stream-api.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify stream API
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: stream-api
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: stream-api/pnpm-lock.yaml
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Type-check
+        run: pnpm check
+      - name: Run tests
+        run: pnpm test -- --run
+      - name: Build
+        run: pnpm build
+
+  deploy:
+    name: Trigger Render deploy
+    needs: verify
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Request deployment
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
+            echo "RENDER_DEPLOY_HOOK_URL is not configured; skipping deployment."
+            exit 0
+          fi
+          curl --fail --retry 3 --retry-delay 5 --max-time 30 -X POST "$RENDER_DEPLOY_HOOK_URL"

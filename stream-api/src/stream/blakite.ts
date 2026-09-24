@@ -27,16 +27,25 @@ const QUALITY_SUFFIX: Record<string, string> = {
 };
 
 type CatalogEntry = {
+  catalogId?: string;
   tmdbId?: string | number;
   originalTmdbId?: string | number;
   title?: string;
   language?: string;
+  audio?: string;
+  audioLanguage?: string;
+  category?: string;
+  dubType?: string;
   type?: string;
   seasons?: Record<string, { totalEpisodes?: number }>;
 };
 type CatalogResponse = {
   success?: boolean;
-  data?: { movies?: Record<string, CatalogEntry>; series?: Record<string, CatalogEntry> };
+  data?: {
+    movies?: Record<string, CatalogEntry>;
+    series?: Record<string, CatalogEntry>;
+    dramas?: Record<string, CatalogEntry>;
+  };
 };
 type BlakiteSource = {
   animeTitle?: string;
@@ -77,13 +86,19 @@ function titleScore(candidate: string, requested: string): number {
   return matched >= 2 ? Math.round((matched / right.split(" ").length) * 60) : 0;
 }
 
-async function getCatalogEntries(): Promise<CatalogEntry[]> {
+async function getCatalogEntries(forceRefresh = false): Promise<CatalogEntry[]> {
+  if (forceRefresh) catalogCache = null;
   if (catalogCache && catalogCache.expiresAt > Date.now()) return catalogCache.entries;
   const response = await fetchWithTimeout(BLAKITE_CATALOG_URL, { headers: API_HEADERS });
   if (!response?.ok) return [];
   try {
     const payload = (await response.json()) as CatalogResponse;
-    const entries = Object.values(payload.data?.movies ?? {}).concat(Object.values(payload.data?.series ?? {}));
+    const collections = [payload.data?.movies, payload.data?.series, payload.data?.dramas];
+    const entries = collections.flatMap(collection =>
+      Object.entries(collection ?? {}).flatMap(([catalogId, value]) =>
+        value && typeof value === "object" ? [{ ...(value as CatalogEntry), catalogId }] : []
+      )
+    );
     catalogCache = { entries, expiresAt: Date.now() + 15 * 60 * 1000 };
     return entries;
   } catch {
@@ -92,8 +107,9 @@ async function getCatalogEntries(): Promise<CatalogEntry[]> {
 }
 
 function matchesRequestType(entry: CatalogEntry, request: StreamRequest): boolean {
-  const type = entry.type?.toLowerCase() ?? "";
-  return request.type === "movie" ? type === "movie" : type === "series";
+  const type = entry.type?.toLowerCase().replace(/[^a-z]/g, "") ?? "";
+  if (request.type === "movie") return type === "movie" || type === "film";
+  return type === "series" || type === "tv" || type === "show" || type === "anime" || type === "drama";
 }
 
 function matchesTmdbId(value: string | number | undefined, requestedId: number): boolean {
@@ -101,28 +117,43 @@ function matchesTmdbId(value: string | number | undefined, requestedId: number):
   return String(value).replace(/^0+(?=\d)/, "") === String(requestedId);
 }
 
+function isHindiEntry(entry: CatalogEntry): boolean {
+  return /hindi|fan.?dub|fandub/i.test([
+    entry.title,
+    entry.language,
+    entry.audio,
+    entry.audioLanguage,
+    entry.category,
+    entry.dubType,
+  ].filter(Boolean).join(" "));
+}
+
 async function findCatalogEntry(metadata: MediaMetadata, request: StreamRequest): Promise<CatalogEntry | null> {
+  const findInEntries = (entries: CatalogEntry[]): CatalogEntry | null => {
+    const requestedTmdbId = request.tmdbId;
+    if (requestedTmdbId !== undefined) {
+      const exactTmdbEntry = entries.find(entry =>
+        (matchesTmdbId(entry.tmdbId, requestedTmdbId) || matchesTmdbId(entry.originalTmdbId, requestedTmdbId) || matchesTmdbId(entry.catalogId, requestedTmdbId)) &&
+        matchesRequestType(entry, request) &&
+        isHindiEntry(entry)
+      );
+      if (exactTmdbEntry) return exactTmdbEntry;
+    }
+
+    const titles = [metadata.primaryTitle, ...metadata.titles].filter(Boolean).slice(0, 8);
+    let best: { entry: CatalogEntry; score: number } | null = null;
+    for (const entry of entries) {
+      if (!entry.tmdbId && !entry.catalogId || !entry.title || !matchesRequestType(entry, request) || !isHindiEntry(entry)) continue;
+      const score = Math.max(...titles.map(title => titleScore(entry.title!, title)));
+      if (score > (best?.score ?? 0)) best = { entry, score };
+    }
+    return best && best.score >= 60 ? best.entry : null;
+  };
+
   const entries = await getCatalogEntries();
-  const requestedTmdbId = request.tmdbId;
-  if (requestedTmdbId !== undefined) {
-    const exactTmdbEntry = entries.find(entry =>
-      (matchesTmdbId(entry.tmdbId, requestedTmdbId) || matchesTmdbId(entry.originalTmdbId, requestedTmdbId)) &&
-      matchesRequestType(entry, request) &&
-      /hindi|org/i.test(`${entry.title ?? ""} ${entry.language ?? ""}`)
-    );
-    if (exactTmdbEntry) return exactTmdbEntry;
-  }
-  const titles = [metadata.primaryTitle, ...metadata.titles].filter(Boolean).slice(0, 8);
-  let best: { entry: CatalogEntry; score: number } | null = null;
-
-  for (const entry of entries) {
-    if (!entry.tmdbId || !entry.title || !matchesRequestType(entry, request)) continue;
-    if (!/hindi|org/i.test(`${entry.title} ${entry.language ?? ""}`)) continue;
-    const score = Math.max(...titles.map(title => titleScore(entry.title!, title)));
-    if (score > (best?.score ?? 0)) best = { entry, score };
-  }
-
-  return best && best.score >= 60 ? best.entry : null;
+  const match = findInEntries(entries);
+  if (match) return match;
+  return findInEntries(await getCatalogEntries(true));
 }
 
 function selectRange(ranges: string, quality: string): { quality: string; range: string; suffix: string } | null {

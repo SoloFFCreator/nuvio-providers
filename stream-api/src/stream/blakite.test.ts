@@ -122,4 +122,47 @@ describe("BlakiteAPI resolver", () => {
       quality: "480P",
     })]);
   });
+
+  it("refreshes the catalogue when a newly added Hindi series is absent from a cached snapshot", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        success: true,
+        data: { movies: {}, series: {} },
+      }), { status: 200 }))
+      .mockImplementation(async (url: string) => {
+        if (url.endsWith("/api/getAllAnime.php")) {
+          return new Response(JSON.stringify({
+            success: true,
+            data: {
+              movies: {},
+              series: {},
+              dramas: {
+                "99778": {
+                  tmdbId: "099778",
+                  originalTmdbId: "99778",
+                  title: "The God of High School (Hindi Dubbed)",
+                  language: "ORG",
+                  type: "TV",
+                },
+              },
+            },
+          }), { status: 200 });
+        }
+        expect(url).toBe("https://blakiteapi.xyz/api/get.php?id=1-1&tmdbId=099778");
+        return new Response(JSON.stringify({
+          success: true,
+          data: { animeTitle: "The God of High School (Hindi Dubbed)", dataId: "fwe2/85/s8/2/e/u/8/r/eu8ry", format: "MP4", quality: "480p" },
+        }), { status: 200 });
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(resolveBlakiteStreams(
+      { primaryTitle: "The God of High School", titles: ["The God of High School"] },
+      { tmdbId: 99778, type: "tv", season: 1, episode: 1, audio: "hindi" }
+    )).resolves.toEqual([expect.objectContaining({
+      name: "BlakiteAPI",
+      url: "https://hugh.cdn.rumble.cloud/video/fwe2/85/s8/2/e/u/8/r/eu8ry.caa.mp4",
+    })]);
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/api/getAllAnime.php"))).toHaveLength(2);
+  });
 });
