@@ -167,12 +167,16 @@ function selectRange(ranges: string, quality: string): { quality: string; range:
   return { ...preferred, suffix: QUALITY_SUFFIX[preferred.quality] };
 }
 
+function buildHlsUrl(dataId: string, range: string, suffix: string): string {
+  return `${RUMBLE_MEDIA_BASE}/${dataId}.${suffix}.tar?r_file=chunklist.m3u8&r_type=application%2Fvnd.apple.mpegurl&r_range=${range}`;
+}
+
 export function buildBlakiteHlsUrl(dataId: string, ranges: string, preferredQuality = "480p"): { url: string; quality: string } | null {
   const selected = selectRange(ranges, preferredQuality);
   if (!selected || !/^[A-Za-z0-9/_-]+$/.test(dataId)) return null;
   return {
     quality: selected.quality,
-    url: `${RUMBLE_MEDIA_BASE}/${dataId}.${selected.suffix}.tar?r_file=chunklist.m3u8&r_type=application%2Fvnd.apple.mpegurl&r_range=${selected.range}`,
+    url: buildHlsUrl(dataId, selected.range, selected.suffix),
   };
 }
 export function buildBlakiteMp4Url(dataId: string, preferredQuality = "480p"): { url: string; quality: string } | null {
@@ -200,12 +204,23 @@ export async function resolveBlakiteStreams(metadata: MediaMetadata, request: St
     const source = payload.data;
     if (!payload.success || !source?.dataId) return [];
     const format = source.format?.toUpperCase();
-    const direct = format === "M3U8" && source.ranges
-      ? buildBlakiteHlsUrl(source.dataId, source.ranges, source.quality ?? "480p")
-      : format === "MP4"
-        ? buildBlakiteMp4Url(source.dataId, source.quality ?? "480p")
-        : null;
-    if (!direct || !(await isClientFetchableMedia(direct.url, PLAYBACK_HEADERS))) return [];
+    let direct = format === "MP4"
+      ? buildBlakiteMp4Url(source.dataId, source.quality ?? "480p")
+      : null;
+    if (format === "M3U8" && source.ranges) {
+      const selected = selectRange(source.ranges, source.quality ?? "480p");
+      if (selected && /^[A-Za-z0-9/_-]+$/.test(source.dataId)) {
+        const suffixes = [selected.suffix, ...Object.values(QUALITY_SUFFIX)].filter((suffix, index, all) => all.indexOf(suffix) === index);
+        for (const suffix of suffixes) {
+          const candidate = { quality: selected.quality, url: buildHlsUrl(source.dataId, selected.range, suffix) };
+          if (await isClientFetchableMedia(candidate.url, PLAYBACK_HEADERS)) {
+            direct = candidate;
+            break;
+          }
+        }
+      }
+    }
+    if (!direct) return [];
     return [{
       name: "BlakiteAPI",
       url: direct.url,
