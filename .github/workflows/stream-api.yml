@@ -26,24 +26,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9.15.5
-      - name: Configure pnpm cache
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: stream-api/pnpm-lock.yaml
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm install --ignore-scripts
       - name: Type-check
-        run: pnpm check
+        run: npx tsc --noEmit
       - name: Run tests
-        run: pnpm test -- --run
+        run: npx vitest run
       - name: Build
-        run: pnpm build
+        run: npx tsc
 
   deploy:
     name: Trigger Render deploy

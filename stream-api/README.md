@@ -26,7 +26,7 @@ pnpm start
 
 For the hosted deployment, the current base URL is `https://nuvioapi-erbmmxkc.manus.space`.
 
-Every push to the `template` branch is verified by `.github/workflows/stream-api.yml` with a frozen install, type-check, full test run, and production build. To make a Render service update automatically after a successful push, add that service's deploy-hook URL to the repository secret `RENDER_DEPLOY_HOOK_URL`; the workflow sends one POST request after verification. The workflow intentionally skips deployment when the secret is absent, so forks and pull requests remain safe.
+Every push to the `template` branch is verified by `.github/workflows/stream-api.yml` with an npm dependency install, type-check, full test run, and production build. To make a Render service update automatically after a successful push, add that service's deploy-hook URL to the repository secret `RENDER_DEPLOY_HOOK_URL`; the workflow sends one POST request after verification. The workflow intentionally skips deployment when the secret is absent, so forks and pull requests remain safe.
 
 ## Request
 
