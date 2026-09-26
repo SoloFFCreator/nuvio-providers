@@ -34,6 +34,7 @@ export function toNuvioStreams(streams: DirectStream[]): NuvioStream[] {
       url: stream.url,
       title: stream.title,
       quality: stream.quality,
+      ...(stream.subtitles && stream.subtitles.length > 0 ? { subtitles: stream.subtitles } : {}),
       headers: playback.format === "hls" && !stream.headers.Accept
         ? { ...stream.headers, Accept: "*/*" }
         : stream.headers,

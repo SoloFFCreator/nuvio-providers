@@ -36,14 +36,16 @@ export function parseStreamRequest(query: Record<string, unknown>): StreamReques
     throw new StreamApiError(400, "invalid_type", "type must be exactly movie or tv.");
   }
 
+  const anilistId = optionalPositiveInteger(query.anilistId, "anilistId");
   const tmdbId = optionalPositiveInteger(query.tmdbId, "tmdbId");
   const imdbId = optionalImdbId(query.imdbId);
   const malId = optionalPositiveInteger(query.malId, "malId");
-  if (Number(tmdbId !== undefined) + Number(imdbId !== undefined) + Number(malId !== undefined) !== 1) {
-    throw new StreamApiError(400, "invalid_identifier", "Provide exactly one identifier: tmdbId, imdbId, or malId.");
+  if (Number(anilistId !== undefined) + Number(tmdbId !== undefined) + Number(imdbId !== undefined) + Number(malId !== undefined) !== 1) {
+    throw new StreamApiError(400, "invalid_identifier", "Provide exactly one identifier: anilistId, tmdbId, imdbId, or malId.");
   }
 
   const request: StreamRequest = {
+    anilistId,
     tmdbId,
     imdbId,
     malId,

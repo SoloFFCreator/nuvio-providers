@@ -1,6 +1,6 @@
 import { isDirectPlaybackUrl } from "./watchAnimeWorld.js";
 import { resolveInternalMalId } from "./megaPlay.js";
-import type { DirectStream, MediaMetadata, StreamRequest, StreamHeaders } from "./types.js";
+import type { DirectStream, MediaMetadata, StreamRequest, StreamHeaders, SubtitleTrack } from "./types.js";
 
 const MEGAVID_BASE = "https://megavid.buzz";
 const USER_AGENT =
@@ -15,6 +15,7 @@ const MEGAVID_HEADERS: StreamHeaders = {
 type MegaVidResponse = {
   success?: boolean;
   source?: string;
+  tracks?: Array<{ file?: string; label?: string; kind?: string; default?: boolean }>;
 };
 
 async function fetchWithTimeout(url: string): Promise<Response | null> {
@@ -35,8 +36,8 @@ export async function resolveMegaVidStreams(
   metadata: MediaMetadata,
   request: StreamRequest,
 ): Promise<DirectStream[]> {
-  const malId = request.malId ?? (
-    request.tmdbId !== undefined || request.imdbId !== undefined
+  const malId = request.malId ?? metadata.malId ?? (
+    request.anilistId !== undefined || request.tmdbId !== undefined || request.imdbId !== undefined
       ? await resolveInternalMalId(metadata, request)
       : undefined
   );
@@ -59,11 +60,21 @@ export async function resolveMegaVidStreams(
   const source = payload.success && payload.source ? payload.source : null;
   if (!source || !isDirectPlaybackUrl(source)) return [];
 
+  const subtitles: SubtitleTrack[] = (payload.tracks ?? [])
+    .filter(track => typeof track.file === "string" && /^https:\/\/.+\.vtt(?:$|\?)/i.test(track.file))
+    .map(track => ({
+      url: track.file as string,
+      label: track.label?.trim() || "Subtitle",
+      kind: track.kind,
+      default: Boolean(track.default),
+    }));
+
   return [{
     name: "MegaVid",
     title: `MegaVid — ${language}`,
     url: source,
     quality: "AUTO",
     headers: MEGAVID_HEADERS,
+    ...(subtitles.length > 0 ? { subtitles } : {}),
   }];
 }

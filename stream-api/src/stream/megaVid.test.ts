@@ -40,6 +40,23 @@ describe("MegaVid resolver", () => {
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe(`https://megavid.buzz/api/mal/58567/1/${audio}`);
   });
 
+  it("extracts direct WebVTT subtitle tracks", async () => {
+    const source = "https://megavid.buzz/vid/token/secret/master.m3u8";
+    const subtitle = "https://megavid.buzz/sub/token/english.vtt";
+    mockFetch(new Response(JSON.stringify({
+      success: true,
+      source,
+      tracks: [
+        { file: subtitle, label: "English", kind: "captions", default: true },
+        { file: "https://megavid.buzz/player/subtitle", label: "Invalid wrapper", kind: "captions" },
+      ],
+    }), { status: 200 }));
+
+    await expect(resolveMegaVidStreams(metadata, request)).resolves.toEqual([
+      expect.objectContaining({ subtitles: [{ url: subtitle, label: "English", kind: "captions", default: true }] }),
+    ]);
+  });
+
   it("does not return a player page or wrapper URL", async () => {
     mockFetch(new Response(JSON.stringify({ success: true, source: "https://megavid.buzz/mal/58567/1/sub" }), { status: 200 }));
     await expect(resolveMegaVidStreams(metadata, request)).resolves.toEqual([]);

@@ -30,11 +30,11 @@ Every push to the `template` branch is verified by `.github/workflows/stream-api
 
 ## Request
 
-Use exactly one identifier. `anilistId` is the primary input; `malId` is also supported. The `type` parameter is required and accepts `movie` or `tv`. Television requests require positive `season` and `episode` values.
+Use exactly one identifier. `tmdbId`, `imdbId`, `malId`, and `anilistId` are supported. The `type` parameter is required and accepts `movie` or `tv`. Television requests require positive `season` and `episode` values.
 
 ```text
-GET https://nuvioapi-erbmmxkc.manus.space/api/stream?anilistId=20&type=tv&season=1&episode=1
-GET https://nuvioapi-erbmmxkc.manus.space/api/stream?malId=20&type=tv&season=1&episode=1
+GET https://nuvio-stream-api-20260925.onrender.com/api/stream?anilistId=178533&type=tv&audio=sub&season=1&episode=1
+GET https://nuvio-stream-api-20260925.onrender.com/api/stream?malId=59145&type=tv&audio=sub&season=1&episode=1
 ```
 
 No special headers are required. The endpoint is intentionally public so that the Android app and Nuvio can call it without package-name restrictions.
@@ -56,7 +56,17 @@ The response body is always a JSON array, including when only one direct source 
       "Accept-Language": "en-US,en;q=0.9",
       "X-Requested-With": "XMLHttpRequest",
       "Referer": "https://play.zephyrix.top/"
-    }
+    },
+    "format": "hls",
+    "mimeType": "application/x-mpegURL",
+    "subtitles": [
+      {
+        "url": "https://megavid.buzz/sub/.../eng.vtt",
+        "label": "English",
+        "kind": "captions",
+        "default": true
+      }
+    ]
   }
 ]
 ```
@@ -78,7 +88,7 @@ Errors return an HTTP status and a JSON object containing an error `code` and `m
 
 ## Kotlin / ExoPlayer example
 
-Use the array response directly. Do not decode the body as a single stream object and do not require `X-App-Package`.
+Use the array response directly. Do not decode the body as a single stream object and do not require `X-App-Package`. When `subtitles` is present, add each WebVTT URL as a Media3 subtitle configuration rather than downloading it through the video data source.
 
 ```kotlin
 data class DirectStream(
@@ -103,7 +113,18 @@ val stream = streams.first()
 val dataSourceFactory = DefaultHttpDataSource.Factory()
     .setDefaultRequestProperties(stream.headers)
 
-val mediaItem = MediaItem.fromUri(stream.url)
+val subtitleConfigurations = stream.subtitles.orEmpty().map { track ->
+    MediaItem.SubtitleConfiguration.Builder(Uri.parse(track.url))
+        .setMimeType(MimeTypes.TEXT_VTT)
+        .setLanguage(track.lang)
+        .setLabel(track.label)
+        .setSelectionFlags(if (track.default == true) C.SELECTION_FLAG_DEFAULT else 0)
+        .build()
+}
+val mediaItem = MediaItem.Builder()
+    .setUri(stream.url)
+    .setSubtitleConfigurations(subtitleConfigurations)
+    .build()
 val mediaSource = when {
     stream.url.substringBefore('?').endsWith(".m3u8", ignoreCase = true) ->
         HlsMediaSource.Factory(dataSourceFactory).createMediaSource(mediaItem)
@@ -115,7 +136,7 @@ player.prepare()
 player.play()
 ```
 
-Signed HLS URLs can expire, so resolve a fresh stream immediately before playback instead of storing response URLs long term.
+Signed HLS and WebVTT URLs can expire, so resolve a fresh stream immediately before playback instead of storing response URLs long term.
 
 ### Network validation
 

@@ -88,6 +88,29 @@ export async function resolveImdbMetadata(imdbId: string): Promise<MediaMetadata
   return { primaryTitle: titles[0], titles };
 }
 
+async function resolveAnilistMetadata(anilistId: number): Promise<MediaMetadata> {
+  try {
+    const response = await fetch("https://graphql.anilist.co", {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query: "query ($id: Int!) { Media(id: $id, type: ANIME) { idMal title { romaji english native } } }",
+        variables: { id: anilistId },
+      }),
+      signal: AbortSignal.timeout(12_000),
+    });
+    if (response.ok) {
+      const payload = (await response.json()) as { data?: { Media?: { idMal?: number | null; title?: { romaji?: string | null; english?: string | null; native?: string | null } } } };
+      const media = payload.data?.Media;
+      const titles = uniqueTitles([media?.title?.english, media?.title?.romaji, media?.title?.native]);
+      if (media && titles.length > 0) return { primaryTitle: titles[0], titles, malId: media.idMal ?? undefined };
+    }
+  } catch {
+    // Report the stable metadata error below.
+  }
+  throw new StreamApiError(404, "anilist_not_found", "No title was found for the supplied AniList ID.");
+}
+
 async function resolveMalMetadata(malId: number): Promise<MediaMetadata> {
   // Prefer Jikan, then use AniList's public GraphQL mirror when Jikan is unavailable.
   try {
@@ -132,10 +155,11 @@ async function resolveMalMetadata(malId: number): Promise<MediaMetadata> {
   throw new StreamApiError(404, "mal_not_found", "No title was found for the supplied MAL ID.");
 }
 
-export async function resolveMetadata(input: { tmdbId?: number; imdbId?: string; malId?: number; type: MediaType }): Promise<MediaMetadata> {
-  if (Number(input.tmdbId !== undefined) + Number(input.imdbId !== undefined) + Number(input.malId !== undefined) !== 1) {
-    throw new StreamApiError(400, "invalid_identifier", "Provide exactly one identifier: tmdbId, imdbId, or malId.");
+export async function resolveMetadata(input: { anilistId?: number; tmdbId?: number; imdbId?: string; malId?: number; type: MediaType }): Promise<MediaMetadata> {
+  if (Number(input.anilistId !== undefined) + Number(input.tmdbId !== undefined) + Number(input.imdbId !== undefined) + Number(input.malId !== undefined) !== 1) {
+    throw new StreamApiError(400, "invalid_identifier", "Provide exactly one identifier: anilistId, tmdbId, imdbId, or malId.");
   }
+  if (input.anilistId !== undefined) return resolveAnilistMetadata(input.anilistId);
   if (input.tmdbId !== undefined) return resolveTmdbMetadata(input.tmdbId, input.type);
   if (input.imdbId !== undefined) return resolveImdbMetadata(input.imdbId);
   return resolveMalMetadata(input.malId as number);
