@@ -53,6 +53,10 @@ async function resolvePlayerId(playerUrl: string): Promise<string | null> {
 function normaliseTitle(value: string): string {
   return value
     .toLocaleLowerCase()
+    .replace(/½/g, " 1 2 ")
+    .replace(/⅓/g, " 1 3 ")
+    .replace(/⅔/g, " 2 3 ")
+    .replace(/⅓/g, " 1 3 ")
     .replace(/[^a-z0-9\s]/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -77,6 +81,48 @@ type JikanSearchResponse = {
     titles?: Array<{ title?: string }>;
   }>;
 };
+
+type AniListMedia = {
+  idMal?: number | null;
+  title?: { romaji?: string | null; english?: string | null; native?: string | null };
+};
+
+async function fetchAniList<T>(query: string, variables: Record<string, unknown>): Promise<T | null> {
+  const response = await fetchWithTimeout("https://graphql.anilist.co", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ query, variables }),
+  });
+  if (!response?.ok) return null;
+  try {
+    return (await response.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
+async function resolveAniListMalId(titles: string[]): Promise<number | null> {
+  const query = `query ($search: String!) {
+    Page(perPage: 12) {
+      media(search: $search, type: ANIME) {
+        idMal
+        title { romaji english native }
+      }
+    }
+  }`;
+  let best: { id: number; score: number } | null = null;
+  for (const title of titles) {
+    const payload = await fetchAniList<{ data?: { Page?: { media?: AniListMedia[] } } }>(query, { search: title });
+    for (const anime of payload?.data?.Page?.media ?? []) {
+      if (!anime.idMal) continue;
+      const candidates = [anime.title?.romaji, anime.title?.english, anime.title?.native].filter(Boolean) as string[];
+      const score = Math.max(0, ...candidates.flatMap(candidate => titles.map(requested => titleScore(candidate, requested))));
+      if (score > (best?.score ?? 0)) best = { id: anime.idMal, score };
+    }
+    if (best?.score !== undefined && best.score >= 100) break;
+  }
+  return best && best.score >= 80 ? best.id : null;
+}
 
 export async function resolveInternalMalId(metadata: MediaMetadata, request: StreamRequest): Promise<number | null> {
   let best: { id: number; score: number } | null = null;
@@ -111,7 +157,8 @@ export async function resolveInternalMalId(metadata: MediaMetadata, request: Str
     if (best?.score !== undefined && best.score >= 80) break;
   }
 
-  return best && best.score >= 80 ? best.id : null;
+  if (best && best.score >= 80) return best.id;
+  return resolveAniListMalId(titles);
 }
 
 async function resolveAnikotoEpisodeId(

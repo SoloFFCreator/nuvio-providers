@@ -89,28 +89,47 @@ export async function resolveImdbMetadata(imdbId: string): Promise<MediaMetadata
 }
 
 async function resolveMalMetadata(malId: number): Promise<MediaMetadata> {
-  // Use Jikan v4 anime endpoint for MAL metadata
+  // Prefer Jikan, then use AniList's public GraphQL mirror when Jikan is unavailable.
   try {
     const res = await fetch(`https://api.jikan.moe/v4/anime/${malId}`, {
       headers: { Accept: "application/json", "User-Agent": "NuvioStreamAPI/1.0" },
       signal: AbortSignal.timeout(12_000),
     });
-    if (!res.ok) {
-      throw new StreamApiError(404, "mal_not_found", "No title was found for the supplied MAL ID.");
+    if (res.ok) {
+      const payload = (await res.json()) as { data?: { title?: string; title_english?: string | null; titles?: Array<{ title?: string }> } };
+      const anime = payload.data;
+      const titles = uniqueTitles([
+        anime?.title_english,
+        anime?.title,
+        ...(anime?.titles?.map(t => t.title) ?? []),
+      ]);
+      if (titles.length > 0) return { primaryTitle: titles[0], titles };
     }
-    const payload = (await res.json()) as { data?: { title?: string; title_english?: string; titles?: Array<{ title?: string }> } };
-    const anime = payload.data;
-    if (!anime) throw new StreamApiError(404, "mal_not_found", "No title was found for the supplied MAL ID.");
-    const titles = uniqueTitles([
-      anime.title_english,
-      anime.title,
-      ...(anime.titles?.map(t => t.title) ?? []),
-    ]);
-    return { primaryTitle: titles[0] ?? "Anime", titles };
-  } catch (err) {
-    if (err instanceof StreamApiError) throw err;
-    throw new StreamApiError(502, "metadata_lookup_failed", "The metadata provider could not be reached.");
+  } catch {
+    // Fall through to AniList.
   }
+
+  try {
+    const response = await fetch("https://graphql.anilist.co", {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query: "query ($malId: Int!) { Media(idMal: $malId, type: ANIME) { title { romaji english native } } }",
+        variables: { malId },
+      }),
+      signal: AbortSignal.timeout(12_000),
+    });
+    if (response.ok) {
+      const payload = (await response.json()) as { data?: { Media?: { title?: { romaji?: string | null; english?: string | null; native?: string | null } } } };
+      const title = payload.data?.Media?.title;
+      const titles = uniqueTitles([title?.english, title?.romaji, title?.native]);
+      if (titles.length > 0) return { primaryTitle: titles[0], titles };
+    }
+  } catch {
+    // Report the same stable metadata error below.
+  }
+
+  throw new StreamApiError(404, "mal_not_found", "No title was found for the supplied MAL ID.");
 }
 
 export async function resolveMetadata(input: { tmdbId?: number; imdbId?: string; malId?: number; type: MediaType }): Promise<MediaMetadata> {

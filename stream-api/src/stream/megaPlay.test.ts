@@ -1,6 +1,6 @@
 import { createCipheriv } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { isClientFetchableMedia, resolveMegaPlayStreams } from "./megaPlay.js";
+import { isClientFetchableMedia, resolveInternalMalId, resolveMegaPlayStreams } from "./megaPlay.js";
 
 const request = {
   tmdbId: 127532,
@@ -39,6 +39,25 @@ function encryptedSourceResponse(file: string): Response {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("MegaPlay resolver with internal MAL bridge", () => {
+  it("falls back to AniList title search when Jikan is unavailable", async () => {
+    const fetchMock = mockFetch([
+      new Response("rate limited", { status: 429 }),
+      new Response("rate limited", { status: 429 }),
+      new Response(JSON.stringify({ data: { Page: { media: [{ idMal: 210, title: { romaji: "Ranma 1/2", english: "Ranma ½" } }] } } }), { status: 200 }),
+      new Response(JSON.stringify({ data: { Page: { media: [{ idMal: 210, title: { romaji: "Ranma 1/2", english: "Ranma ½" } }] } } }), { status: 200 }),
+    ]);
+
+    const resolved = await resolveInternalMalId({ primaryTitle: "Ranma ½", titles: ["Ranma ½"] }, {
+      tmdbId: 419,
+      type: "tv",
+      audio: "sub",
+      season: 1,
+      episode: 1,
+    });
+    expect(resolved).toBe(210);
+    expect(fetchMock.mock.calls[2]?.[0]).toBe("https://graphql.anilist.co");
+  });
+
   it("resolves a TMDB request through a high-confidence internal MAL bridge and direct sub source", async () => {
     const mediaUrl = "https://cdn.watching.onl/anime/test/master.m3u8";
     const fetchMock = mockFetch([

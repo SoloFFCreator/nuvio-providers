@@ -39,4 +39,17 @@ describe("TMDB and IMDb metadata resolution", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(mockJsonResponse({ error: "not found" }, 404)));
     await expect(resolveImdbMetadata("tt22297722")).rejects.toBeInstanceOf(StreamApiError);
   });
+
+  it("falls back to AniList when Jikan cannot resolve a MAL identifier", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(mockJsonResponse({ error: "rate limited" }, 429))
+      .mockResolvedValueOnce(mockJsonResponse({ data: { Media: { title: { romaji: "Ranma 1/2", english: "Ranma ½" } } } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(resolveMetadata({ malId: 210, type: "tv" })).resolves.toEqual({
+      primaryTitle: "Ranma ½",
+      titles: ["Ranma ½", "Ranma 1/2"],
+    });
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("https://graphql.anilist.co");
+  });
 });
