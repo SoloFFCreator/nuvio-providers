@@ -24,9 +24,11 @@ pnpm build
 pnpm start
 ```
 
-For the hosted deployment, the current base URL is `https://nuvioapi-erbmmxkc.manus.space`.
+For the hosted deployment, the current canonical base URL is `https://nuvio-stream-api-20260925.onrender.com`.
 
 Every push to the `template` branch is verified by `.github/workflows/stream-api.yml` with an npm dependency install, type-check, full test run, and production build. To make a Render service update automatically after a successful push, add that service's deploy-hook URL to the repository secret `RENDER_DEPLOY_HOOK_URL`; the workflow sends one POST request after verification. The workflow intentionally skips deployment when the secret is absent, so forks and pull requests remain safe.
+
+The `template` branch is the source of truth for the stream resolver. See `SYNC.md` for the synchronization contract and safe update procedure.
 
 ## Request
 
