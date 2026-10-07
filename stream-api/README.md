@@ -37,7 +37,14 @@ Use exactly one identifier. `tmdbId`, `imdbId`, `malId`, and `anilistId` are sup
 ```text
 GET https://nuvio-stream-api-20260925.onrender.com/api/stream?anilistId=178533&type=tv&audio=sub&season=1&episode=1
 GET https://nuvio-stream-api-20260925.onrender.com/api/stream?malId=59145&type=tv&audio=sub&season=1&episode=1
+
+# Ranma ½ original TV series (1989), not the 2024 remake
+GET https://nuvio-stream-api-20260925.onrender.com/api/stream?malId=210&type=tv&audio=sub&season=1&episode=1
+GET https://nuvio-stream-api-20260925.onrender.com/api/stream?tmdbId=57706&type=tv&audio=sub&season=1&episode=1
+GET https://nuvio-stream-api-20260925.onrender.com/api/stream?imdbId=tt0096686&type=tv&audio=sub&season=1&episode=1
 ```
+
+For the original *Ranma ½* series, use MAL `210`, TMDB `57706`, or IMDb `tt0096686`. The 2024 remake is a separate title with TMDB `259140`.
 
 No special headers are required. The endpoint is intentionally public so that the Android app and Nuvio can call it without package-name restrictions.
 
