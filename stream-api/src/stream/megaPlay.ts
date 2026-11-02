@@ -17,6 +17,7 @@ const PLAYER_HEADERS = {
 };
 const MEDIA_HEADERS: StreamHeaders = {
   "User-Agent": USER_AGENT,
+  Origin: MEGAPLAY_BASE,
   Referer: `${MEGAPLAY_BASE}/`,
 };
 

@@ -1,44 +1,28 @@
 import type { DirectStream } from "./types.js";
 
-export type ExoPlayerStream = DirectStream & {
-  format: "hls" | "progressive";
-  mimeType: "application/x-mpegURL" | "video/mp4" | "application/octet-stream";
-};
-
-export type NuvioStream = ExoPlayerStream & {
+export type NuvioStream = {
   name: string;
+  url: string;
+  title: string;
+  quality: string;
+  headers: DirectStream["headers"];
 };
 
 const DEFAULT_PROVIDER_NAME = "WatchAnimeWorld";
 
-function inferExoPlayerFormat(url: string): Pick<ExoPlayerStream, "format" | "mimeType"> {
-  const normalized = url.toLowerCase();
-  if (normalized.includes(".m3u8") || normalized.includes("r_file=chunklist.m3u8")) {
-    return { format: "hls", mimeType: "application/x-mpegURL" };
-  }
-  if (normalized.includes(".mp4") || normalized.includes("r_file=video.mp4")) {
-    return { format: "progressive", mimeType: "video/mp4" };
-  }
-  return { format: "progressive", mimeType: "application/octet-stream" };
-}
-
 /**
- * Nuvio expects a top-level array of stream objects. The format and MIME hint are
- * additive fields for Media3/ExoPlayer clients; legacy Nuvio clients can ignore them.
+ * Keep the public payload intentionally small for strict Kotlin serializers and
+ * older Nuvio clients. Media3 can infer HLS/MP4 from the URL, while the full
+ * provider headers remain required for manifest and segment requests.
  */
 export function toNuvioStreams(streams: DirectStream[]): NuvioStream[] {
-  return streams.map(stream => {
-    const playback = inferExoPlayerFormat(stream.url);
-    return {
-      name: stream.name ?? DEFAULT_PROVIDER_NAME,
-      url: stream.url,
-      title: stream.title,
-      quality: stream.quality,
-      ...(stream.subtitles && stream.subtitles.length > 0 ? { subtitles: stream.subtitles } : {}),
-      headers: playback.format === "hls" && !stream.headers.Accept
-        ? { ...stream.headers, Accept: "*/*" }
-        : stream.headers,
-      ...playback,
-    };
-  });
+  return streams.map(stream => ({
+    name: stream.name ?? DEFAULT_PROVIDER_NAME,
+    url: stream.url,
+    title: stream.title,
+    quality: stream.quality,
+    headers: stream.headers.Accept
+      ? stream.headers
+      : { ...stream.headers, Accept: "*/*" },
+  }));
 }

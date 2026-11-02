@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { toNuvioStreams } from "./compatibility";
+import { toNuvioStreams } from "./compatibility.js";
 
 const hlsStream = {
   url: "https://cdn.example.net/video/master.m3u8?token=abc",
@@ -12,7 +12,7 @@ const hlsStream = {
 };
 
 describe("toNuvioStreams", () => {
-  it("keeps a single HLS source as a one-item array with ExoPlayer format metadata", () => {
+  it("keeps a single HLS source as a one-item strict legacy-compatible array", () => {
     const result = toNuvioStreams([hlsStream]);
 
     expect(Array.isArray(result)).toBe(true);
@@ -20,13 +20,14 @@ describe("toNuvioStreams", () => {
     expect(result[0]).toEqual({
       ...hlsStream,
       name: "WatchAnimeWorld",
-      format: "hls",
-      mimeType: "application/x-mpegURL",
       headers: { ...hlsStream.headers, Accept: "*/*" },
     });
+    expect(result[0]).not.toHaveProperty("format");
+    expect(result[0]).not.toHaveProperty("mimeType");
+    expect(result[0]).not.toHaveProperty("subtitles");
   });
 
-  it("marks direct MP4 sources as progressive without overriding caller headers", () => {
+  it("preserves an existing Accept header for direct MP4 sources", () => {
     const mp4 = {
       ...hlsStream,
       url: "https://cdn.example.net/video/video.mp4",
@@ -34,10 +35,9 @@ describe("toNuvioStreams", () => {
     };
     const result = toNuvioStreams([mp4]);
 
-    expect(result[0]).toMatchObject({
-      format: "progressive",
-      mimeType: "video/mp4",
-      headers: mp4.headers,
+    expect(result[0]).toEqual({
+      ...mp4,
+      name: "WatchAnimeWorld",
     });
   });
 });
