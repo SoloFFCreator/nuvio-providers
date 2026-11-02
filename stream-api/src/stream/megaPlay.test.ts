@@ -68,7 +68,12 @@ describe("MegaPlay resolver with internal MAL bridge", () => {
     ]);
 
     await expect(resolveMegaPlayStreams(metadata, request)).resolves.toEqual([
-      expect.objectContaining({ name: "MegaPlay", title: "MegaPlay — sub", url: mediaUrl }),
+      expect.objectContaining({
+        name: "MegaPlay",
+        title: "MegaPlay — sub",
+        url: mediaUrl,
+        headers: expect.objectContaining({ Origin: "https://megaplay.buzz" }),
+      }),
     ]);
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("api.jikan.moe/v4/anime");
     expect(String(fetchMock.mock.calls[1]?.[0])).toContain("/mal/58567/1/sub");
