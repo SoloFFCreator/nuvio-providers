@@ -4,6 +4,7 @@ import { resolveMetadata } from "./metadata.js";
 import { parseStreamRequest } from "./validation.js";
 import { toNuvioStreams } from "./compatibility.js";
 import { resolveBlakiteStreams } from "./blakite.js";
+import { resolveDesiDubStreams } from "./desidub.js";
 import { resolveMegaPlayStreams, isClientFetchableMedia } from "./megaPlay.js";
 import { resolveMegaVidStreams } from "./megaVid.js";
 
@@ -22,7 +23,10 @@ export async function handleStreamRequest(req: Request, res: Response): Promise<
     const request = parseStreamRequest(req.query as Record<string, unknown>);
     const metadata = await resolveMetadata({ anilistId: request.anilistId, tmdbId: request.tmdbId, imdbId: request.imdbId, malId: request.malId, type: request.type });
     const resolvers = request.audio === "hindi"
-      ? [() => resolveBlakiteStreams(metadata, request)]
+      ? [
+          () => resolveBlakiteStreams(metadata, request),
+          () => resolveDesiDubStreams(metadata, request),
+        ]
       : [
           () => resolveMegaVidStreams(metadata, request),
           () => resolveMegaPlayStreams(metadata, request),
@@ -49,8 +53,8 @@ export async function handleStreamRequest(req: Request, res: Response): Promise<
     throw new StreamApiError(
       404,
       "streams_not_found",
-      request.audio === "hindi"
-        ? "No client-fetchable Hindi playback stream was available from BlakiteAPI."
+        request.audio === "hindi"
+        ? "No client-fetchable Hindi playback stream was available from BlakiteAPI or DesiDubAnime."
         : `No client-fetchable ${request.audio} playback stream was available from MegaVid or MegaPlay.`
     );
   } catch (error) {
